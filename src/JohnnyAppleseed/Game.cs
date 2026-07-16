@@ -12,6 +12,13 @@ static class Game
 
     public static void Run()
     {
+        // Log build stamp before anything else so it appears even on crash.
+        Console.Error.WriteLine(
+            $"[johnny-appleseed] {BuildInfo.Version} " +
+            $"built {BuildInfo.BuildDate} " +
+            $"on {BuildInfo.BuildHost} " +
+            $"@ {BuildInfo.GitHash}");
+
         AppData.Initialize();
 
         // On Linux: detect display server and guide GLFW's backend selection

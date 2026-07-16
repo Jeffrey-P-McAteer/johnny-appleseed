@@ -22,6 +22,91 @@
   </ItemGroup>
 
   <!--
+    ══════════════════════════════════════════════════════════════════════════
+    Build-time stamp: generates obj/.../BuildInfo.cs before CoreCompile with
+    version (from version.txt), UTC timestamp, hostname, and git short hash.
+    The file is in obj/ so it is never checked into version control.
+    ══════════════════════════════════════════════════════════════════════════
+  -->
+  <Target Name="GenerateBuildInfo" BeforeTargets="CoreCompile">
+
+    <!-- ── version from version.txt at repo root ─────────────────────────── -->
+    <PropertyGroup>
+      <_VersionFile>$(MSBuildThisFileDirectory)..\..\version.txt</_VersionFile>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(_VersionFile)')"
+           Text="version.txt not found — expected at $(_VersionFile)" />
+    <PropertyGroup>
+      <_BuildVersion>$([System.IO.File]::ReadAllText("$(_VersionFile)").Trim())</_BuildVersion>
+    </PropertyGroup>
+
+    <!-- ── UTC build timestamp ───────────────────────────────────────────── -->
+    <PropertyGroup>
+      <_BuildDate>$([System.DateTime]::UtcNow.ToString("yyyy-MM-dd HH:mm:ss")) UTC</_BuildDate>
+    </PropertyGroup>
+
+    <!-- ── hostname ──────────────────────────────────────────────────────── -->
+    <Exec Command="hostname"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true"
+          StandardOutputImportance="low"
+          StandardErrorImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_BuildHostRaw" />
+    </Exec>
+    <PropertyGroup>
+      <!-- Prefer 'hostname' output; fall back to env vars (CI / Windows) -->
+      <_BuildHost Condition="'$(_BuildHostRaw)' != ''">$(_BuildHostRaw.Trim())</_BuildHost>
+      <_BuildHost Condition="'$(_BuildHost)' == '' And '$(COMPUTERNAME)' != ''">$(COMPUTERNAME)</_BuildHost>
+      <_BuildHost Condition="'$(_BuildHost)' == '' And '$(HOSTNAME)'    != ''">$(HOSTNAME)</_BuildHost>
+      <_BuildHost Condition="'$(_BuildHost)' == ''">unknown</_BuildHost>
+    </PropertyGroup>
+
+    <!-- ── git short hash ────────────────────────────────────────────────── -->
+    <Exec Command="git rev-parse --short HEAD"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true"
+          StandardOutputImportance="low"
+          StandardErrorImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_GitHashRaw" />
+    </Exec>
+    <PropertyGroup>
+      <_GitHash Condition="'$(_GitHashRaw)' != ''">$(_GitHashRaw.Trim())</_GitHash>
+      <_GitHash Condition="'$(_GitHash)' == ''">untracked</_GitHash>
+    </PropertyGroup>
+
+    <!-- ── write BuildInfo.cs to the intermediate output directory ──────── -->
+    <MakeDir Directories="$(IntermediateOutputPath)" />
+    <!-- Notes on MSBuild item escaping used here:
+           %22 = "   %3B = ;   &lt; = <   &gt; = >
+         MSBuild strips leading whitespace from Include values, so indentation
+         is omitted — the C# compiler does not require it.
+         Semicolons in code lines must be %3B or they split the item list.  -->
+    <ItemGroup>
+      <_BuildInfoLines Include="// &lt;auto-generated /&gt; - regenerated on every compile - do not edit" />
+      <_BuildInfoLines Include="namespace JohnnyAppleseed%3B" />
+      <_BuildInfoLines Include="static class BuildInfo {" />
+      <_BuildInfoLines Include="public const string Version   = %22$(_BuildVersion)%22%3B" />
+      <_BuildInfoLines Include="public const string BuildDate = %22$(_BuildDate)%22%3B" />
+      <_BuildInfoLines Include="public const string BuildHost = %22$(_BuildHost)%22%3B" />
+      <_BuildInfoLines Include="public const string GitHash   = %22$(_GitHash)%22%3B" />
+      <_BuildInfoLines Include="}" />
+    </ItemGroup>
+    <WriteLinesToFile
+      File="$(IntermediateOutputPath)BuildInfo.cs"
+      Lines="@(_BuildInfoLines)"
+      Overwrite="true"
+      Encoding="UTF-8" />
+
+    <!-- Make the generated file visible to CoreCompile -->
+    <ItemGroup>
+      <Compile Include="$(IntermediateOutputPath)BuildInfo.cs" />
+    </ItemGroup>
+  </Target>
+
+  <!--
+    ══════════════════════════════════════════════════════════════════════════
+    Native library overrides
+    ══════════════════════════════════════════════════════════════════════════
     Override / supplement native libs for RIDs missing from or improved beyond
     the Raylib-cs NuGet package.  Files are only included when present on disk,
     so a clean checkout builds fine with the NuGet defaults.
@@ -49,7 +134,6 @@
              Condition="Exists('runtimes\linux-x64\native\.wayland-enabled')">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       <CopyToPublishDirectory>Always</CopyToPublishDirectory>
-      <!-- Publish to the same directory as the executable, not runtimes/ -->
       <Link>.wayland-enabled</Link>
     </Content>
 
@@ -69,9 +153,8 @@
   </ItemGroup>
 
   <!--
-    After the NuGet native assets are staged for publish, overwrite the
-    linux-x64 libraylib.so with our Wayland-capable version when present.
-    This target runs after ResolveNativeAssets so our copy wins.
+    After NuGet stages native assets for publish, overwrite linux-x64's
+    libraylib.so with our Wayland-capable version when present.
   -->
   <Target Name="OverrideWaylandLib"
           AfterTargets="ResolveNativeAssets"
@@ -79,10 +162,8 @@
                      Exists('$(MSBuildThisFileDirectory)runtimes\linux-x64\native\libraylib.so')">
     <Message Text="Using Wayland-capable libraylib.so override" Importance="high" />
     <ItemGroup>
-      <!-- Remove any NuGet-sourced linux-x64 libraylib.so from the publish list -->
       <ResolvedNativeAssetToPublish Remove="@(ResolvedNativeAssetToPublish)"
         Condition="'%(Filename)%(Extension)' == 'libraylib.so'" />
-      <!-- Re-add ours with higher priority -->
       <ResolvedNativeAssetToPublish Include="$(MSBuildThisFileDirectory)runtimes\linux-x64\native\libraylib.so">
         <DestinationSubPath>libraylib.so</DestinationSubPath>
       </ResolvedNativeAssetToPublish>
