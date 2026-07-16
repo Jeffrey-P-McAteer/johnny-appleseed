@@ -1,0 +1,92 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>JohnnyAppleseed</AssemblyName>
+    <RootNamespace>JohnnyAppleseed</RootNamespace>
+    <!-- Single-file publish with embedded native libs -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <!-- Suppress single-file IL stripping warnings from Raylib internals -->
+    <SuppressTrimAnalysisWarnings>true</SuppressTrimAnalysisWarnings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Raylib-cs" Version="8.0.0" />
+  </ItemGroup>
+
+  <!--
+    Override / supplement native libs for RIDs missing from or improved beyond
+    the Raylib-cs NuGet package.  Files are only included when present on disk,
+    so a clean checkout builds fine with the NuGet defaults.
+
+    linux-x64 (Wayland):
+      Produced by `uv run scripts/setup-native-libs.py linux-wayland`.
+      Replaces the NuGet X11-only lib with a GLFW 3.4 multi-platform build
+      (both X11 and Wayland backends compiled in).
+      The sentinel .wayland-enabled is read at runtime by Platform/LinuxDisplay.cs
+      to decide whether to prefer Wayland over X11/XWayland.
+
+    linux-arm64, win-arm64:
+      Produced by `uv run scripts/setup-native-libs.py linux-arm64 win-arm64`.
+      RIDs absent from the Raylib-cs NuGet package.
+  -->
+  <ItemGroup>
+    <!-- linux-x64 Wayland lib overrides the NuGet X11-only copy -->
+    <Content Include="runtimes\linux-x64\native\libraylib.so"
+             Condition="Exists('runtimes\linux-x64\native\libraylib.so')">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <!-- Sentinel read by LinuxDisplay.WaylandLibPresent() at runtime -->
+    <Content Include="runtimes\linux-x64\native\.wayland-enabled"
+             Condition="Exists('runtimes\linux-x64\native\.wayland-enabled')">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+      <!-- Publish to the same directory as the executable, not runtimes/ -->
+      <Link>.wayland-enabled</Link>
+    </Content>
+
+    <!-- linux-arm64: cross-compiled by setup-native-libs.py -->
+    <Content Include="runtimes\linux-arm64\native\libraylib.so"
+             Condition="Exists('runtimes\linux-arm64\native\libraylib.so')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+
+    <!-- win-arm64: cross-compiled by setup-native-libs.py -->
+    <Content Include="runtimes\win-arm64\native\raylib.dll"
+             Condition="Exists('runtimes\win-arm64\native\raylib.dll')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+  <!--
+    After the NuGet native assets are staged for publish, overwrite the
+    linux-x64 libraylib.so with our Wayland-capable version when present.
+    This target runs after ResolveNativeAssets so our copy wins.
+  -->
+  <Target Name="OverrideWaylandLib"
+          AfterTargets="ResolveNativeAssets"
+          Condition="'$(RuntimeIdentifier)' == 'linux-x64' And
+                     Exists('$(MSBuildThisFileDirectory)runtimes\linux-x64\native\libraylib.so')">
+    <Message Text="Using Wayland-capable libraylib.so override" Importance="high" />
+    <ItemGroup>
+      <!-- Remove any NuGet-sourced linux-x64 libraylib.so from the publish list -->
+      <ResolvedNativeAssetToPublish Remove="@(ResolvedNativeAssetToPublish)"
+        Condition="'%(Filename)%(Extension)' == 'libraylib.so'" />
+      <!-- Re-add ours with higher priority -->
+      <ResolvedNativeAssetToPublish Include="$(MSBuildThisFileDirectory)runtimes\linux-x64\native\libraylib.so">
+        <DestinationSubPath>libraylib.so</DestinationSubPath>
+      </ResolvedNativeAssetToPublish>
+    </ItemGroup>
+  </Target>
+
+</Project>
