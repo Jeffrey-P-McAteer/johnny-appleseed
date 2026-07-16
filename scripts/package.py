@@ -13,7 +13,6 @@ Johnny Appleseed — cross-platform packaging script.
 Usage (from repo root):
     uv run scripts/package.py                     # all targets
     uv run scripts/package.py windows-x64         # specific target
-    uv run scripts/package.py --skip-download      # skip arm64 native-lib download
 
 Outputs:
     dist/windows-x64/windows-x64.zip
@@ -52,8 +51,6 @@ APP_NAME      = "JohnnyAppleseed"
 APP_ID        = "com.johnnyseed.game"
 APP_VERSION   = "1.0.0"
 
-# Raylib 6.0 GitHub release base URL for missing native-lib downloads
-RAYLIB_RELEASE_BASE = "https://github.com/raysan5/raylib/releases/download/5.5"
 
 # Map: (target_os, arch) → .NET RID
 TARGETS: dict[tuple[str, str], str] = {
@@ -69,61 +66,39 @@ TARGETS: dict[tuple[str, str], str] = {
 
 def ensure_native_lib(target_os: str, arch: str, skip_download: bool) -> bool:
     """
-    Return True if the native lib for this RID is available (either already
-    bundled by the NuGet package or downloaded into the runtimes/ tree).
+    Return True if the native lib for this RID is available.
+
+    For linux-x64:   the Raylib-cs NuGet supplies it; setup-native-libs.py
+                     optionally replaces it with the Wayland-capable version.
+    For linux-arm64: must be built by `uv run scripts/setup-native-libs.py linux-arm64`
+                     (Raylib 5.5 does not publish pre-built arm64 Linux binaries).
+    For win-arm64:   must be built by `uv run scripts/setup-native-libs.py win-arm64`.
+    All others:      bundled in the Raylib-cs NuGet package automatically.
     """
     if target_os == "linux" and arch == "arm64":
         dest = NATIVE_DIR / "linux-arm64" / "native" / "libraylib.so"
         if dest.exists():
             return True
-        if skip_download:
-            print(f"  [warn] {dest} not found; skipping (use --skip-download=false to attempt download)")
-            return False
-        return download_linux_arm64_raylib(dest)
+        print(
+            f"  [warn] linux-arm64 native lib not found at {dest.relative_to(REPO_ROOT)}\n"
+            "         Run: uv run scripts/setup-native-libs.py linux-arm64"
+        )
+        return False
 
     if target_os == "windows" and arch == "arm64":
         dest = NATIVE_DIR / "win-arm64" / "native" / "raylib.dll"
         if dest.exists():
             return True
-        if skip_download:
-            print(f"  [warn] {dest} not found; win-arm64 requires manual Raylib 6.0 ARM64 cross-compilation")
-            return False
-        return download_win_arm64_raylib(dest)
+        print(
+            f"  [warn] win-arm64 native lib not found at {dest.relative_to(REPO_ROOT)}\n"
+            "         Run: uv run scripts/setup-native-libs.py win-arm64"
+        )
+        return False
 
-    # All other targets are bundled in the Raylib-cs NuGet package
+    # linux-x64, win-x64, osx-x64, osx-arm64 — bundled in the NuGet package.
+    # setup-native-libs.py linux-wayland may replace linux-x64's lib with the
+    # Wayland-capable version; that's handled by the OverrideWaylandLib MSBuild target.
     return True
-
-
-def download_linux_arm64_raylib(dest: Path) -> bool:
-    """Download the linux-arm64 (aarch64) libraylib.so from Raylib releases."""
-    url = f"{RAYLIB_RELEASE_BASE}/raylib-5.5_linux_aarch64.tar.gz"
-    print(f"  Downloading linux-arm64 libraylib.so from {url} …")
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        with tempfile.NamedTemporaryFile(suffix=".tar.gz", delete=False) as tmp:
-            urllib.request.urlretrieve(url, tmp.name)
-            with tarfile.open(tmp.name, "r:gz") as tf:
-                for member in tf.getmembers():
-                    if member.name.endswith("libraylib.so") or member.name.endswith("libraylib.so.500"):
-                        member.name = "libraylib.so"
-                        tf.extract(member, dest.parent)
-                        print(f"  Extracted libraylib.so → {dest}")
-                        return True
-        print(f"  [warn] libraylib.so not found inside the archive; skipping linux-arm64")
-        return False
-    except Exception as e:
-        print(f"  [warn] download failed ({e}); skipping linux-arm64")
-        return False
-
-
-def download_win_arm64_raylib(dest: Path) -> bool:
-    """
-    Windows ARM64 Raylib requires MSVC cross-compilation; no pre-built binary
-    is available in the official releases. We skip gracefully here.
-    """
-    print("  [warn] win-arm64 raylib.dll must be cross-compiled with MSVC.")
-    print("  Place it at:", dest)
-    return False
 
 
 # ── dotnet publish ─────────────────────────────────────────────────────────────
@@ -309,16 +284,24 @@ def _create_dmg_hdiutil(staging: Path, output: Path, label: str) -> None:
 def _create_dmg_genisoimage(staging: Path, output: Path, label: str) -> None:
     tool = shutil.which("genisoimage") or shutil.which("mkisofs")
     if tool is not None:
-        subprocess.run([
-            tool,
-            "-V", label[:32],
-            "-D", "-r",
-            "--hfs", "--hfs-volid", label[:27],
-            "--mac-name", "-no-pad", "-apple", "-probe",
-            "-o", str(output),
-            str(staging),
-        ], check=True, capture_output=True)
-        return
+        try:
+            subprocess.run([
+                tool,
+                "-V", label[:32],
+                "-D", "-r",
+                "--hfs", "--hfs-volid", label[:27],
+                "--mac-name", "-no-pad", "-apple", "-probe",
+                "-o", str(output),
+                str(staging),
+            ], check=True, capture_output=True)
+            return
+        except subprocess.CalledProcessError as e:
+            # genisoimage found but failed — likely compiled without HFS+ support
+            # (exit 255 is the common indicator).  Fall through to ZIP fallback.
+            print(
+                f"  [note] {Path(tool).name} failed (exit {e.returncode}); "
+                "HFS+ support may not be compiled in — falling back to ZIP-format .dmg"
+            )
 
     # Fallback: ZIP containing the .app bundle (not a real DMG but portable).
     # We only include the .app tree — the Applications symlink is only useful
@@ -525,10 +508,6 @@ def main() -> None:
         default=ALL_TARGET_NAMES,
         help="Which targets to build (default: all). E.g. windows-x64 macos-arm64",
     )
-    parser.add_argument(
-        "--skip-download", action="store_true",
-        help="Don't attempt to download missing arm64 native libs",
-    )
     args = parser.parse_args()
 
     # Validate requested targets
@@ -545,7 +524,7 @@ def main() -> None:
 
         print(f"\n[{target_name}]")
 
-        if not ensure_native_lib(os_name, arch, args.skip_download):
+        if not ensure_native_lib(os_name, arch, False):
             print(f"  Skipping {target_name} — native lib unavailable")
             continue
 

@@ -9,32 +9,32 @@ namespace JohnnyAppleseed.Platform;
 /// Background
 /// ──────────
 /// The Raylib-cs NuGet libraylib.so is compiled with GLFW 3.4 but only the
-/// X11 backend enabled.  On a typical Wayland desktop both WAYLAND_DISPLAY
-/// (native compositor) and DISPLAY (XWayland compatibility socket) are set,
-/// so the game runs today via XWayland without any special handling.
+/// X11 backend enabled.  On a Wayland desktop both WAYLAND_DISPLAY (native
+/// compositor) and DISPLAY (XWayland compatibility socket) are typically set,
+/// so the game runs via XWayland without any extra setup.
 ///
-/// "Native Wayland" — talking directly to the Wayland compositor rather than
-/// through XWayland — gives better HiDPI scaling, lower latency, and works on
-/// pure Wayland sessions that don't run XWayland at all.
+/// "Native Wayland" — speaking directly to the Wayland compositor — gives
+/// better HiDPI scaling, lower latency, and works on pure Wayland sessions
+/// that don't run XWayland at all.
 ///
 /// Enabling native Wayland
 /// ───────────────────────
-/// Build a GLFW-3.4 multi-platform libraylib.so (both X11 and Wayland backends
-/// compiled in) with:
+/// Build a GLFW 3.4 multi-platform libraylib.so (both X11 and Wayland
+/// backends compiled in) with:
 ///
 ///     uv run scripts/setup-native-libs.py linux-wayland
 ///
-/// That script places the library at
-///   src/JohnnyAppleseed/runtimes/linux-x64/native/libraylib.so
-/// and writes a sentinel file
-///   src/JohnnyAppleseed/runtimes/linux-x64/native/.wayland-enabled
+/// Then package or publish for linux-x64:
 ///
-/// The .csproj includes these files in the publish output.  When the sentinel
-/// is present at runtime this class unsets DISPLAY before InitWindow so that
-/// GLFW 3.4's auto-detection picks the Wayland backend instead of X11.
+///     uv run scripts/package.py linux-x64
 ///
-/// If the sentinel is absent (NuGet X11-only lib), DISPLAY is left untouched
-/// and the game falls back to XWayland transparently — safe on all desktops.
+/// The MSBuild target <c>GenerateBuildInfo</c> detects the Wayland lib at
+/// compile time and sets <c>BuildInfo.WaylandEnabled = true</c>.  When the
+/// binary starts on a Wayland session, this class unsets DISPLAY so GLFW
+/// 3.4's backend auto-detect chooses Wayland.
+///
+/// If <c>BuildInfo.WaylandEnabled</c> is false (default NuGet X11-only lib),
+/// DISPLAY is left intact and the game runs via XWayland — safe on all desktops.
 /// </summary>
 [SupportedOSPlatform("linux")]
 static class LinuxDisplay
@@ -54,53 +54,53 @@ static class LinuxDisplay
         string? display        = Environment.GetEnvironmentVariable("DISPLAY");
         string? sessionType    = Environment.GetEnvironmentVariable("XDG_SESSION_TYPE") ?? "";
 
-        bool hasWayland    = !string.IsNullOrEmpty(waylandDisplay);
-        bool hasX11        = !string.IsNullOrEmpty(display);
+        bool hasWayland     = !string.IsNullOrEmpty(waylandDisplay);
+        bool hasX11         = !string.IsNullOrEmpty(display);
         bool waylandSession = sessionType is "wayland" || (hasWayland && !hasX11);
 
         if (!hasWayland && !hasX11)
         {
-            // No display at all — Raylib will fail to open a window; surface
-            // the problem early with a readable message.
             Detected = Backend.Unknown;
-            Console.Error.WriteLine("[Display] Neither DISPLAY nor WAYLAND_DISPLAY is set. The game cannot open a window.");
+            Console.Error.WriteLine(
+                "[Display] Neither DISPLAY nor WAYLAND_DISPLAY is set — " +
+                "cannot open a window.");
             return;
         }
 
         if (hasWayland && hasX11 && waylandSession)
         {
-            // Wayland compositor running XWayland alongside itself (the usual
-            // GNOME/KDE Wayland setup).
+            // Wayland compositor with XWayland running alongside it (typical
+            // GNOME / KDE Wayland setup).  Prefer native Wayland when the
+            // multi-platform lib is compiled in.
             if (WaylandLibPresent())
             {
-                // Multi-platform lib is installed: unset DISPLAY so GLFW 3.4's
-                // platform auto-detect picks Wayland over X11/XWayland.
+                // Unset DISPLAY: GLFW 3.4's auto-detect then picks the
+                // Wayland backend (WAYLAND_DISPLAY set, DISPLAY absent).
                 Environment.SetEnvironmentVariable("DISPLAY", null);
                 Detected = Backend.WaylandNative;
-                Console.Error.WriteLine("[Display] Native Wayland (multi-platform libraylib)");
+                Console.Error.WriteLine("[Display] Wayland (native)");
             }
             else
             {
                 Detected = Backend.XWayland;
                 Console.Error.WriteLine(
-                    "[Display] XWayland (Wayland session detected; run " +
-                    "`uv run scripts/setup-native-libs.py linux-wayland` " +
-                    "to enable native Wayland)");
+                    "[Display] XWayland  " +
+                    "(build with `uv run scripts/setup-native-libs.py linux-wayland` " +
+                    "then repackage to enable native Wayland)");
             }
             return;
         }
 
         if (hasWayland && !hasX11)
         {
-            // Pure Wayland — no XWayland fallback available.
+            // Pure Wayland — no XWayland fallback.
             if (!WaylandLibPresent())
             {
-                // X11-only lib + no DISPLAY = InitWindow will fail.
                 Console.Error.WriteLine(
-                    "[Display] FATAL: Pure Wayland session but libraylib.so " +
-                    "has no Wayland backend compiled in.\n" +
+                    "[Display] FATAL: Pure Wayland session but this binary was " +
+                    "compiled without Wayland support.\n" +
                     "          Run `uv run scripts/setup-native-libs.py linux-wayland` " +
-                    "to build a Wayland-capable library, then re-package.");
+                    "then repackage.");
             }
             else
             {
@@ -115,11 +115,15 @@ static class LinuxDisplay
         Console.Error.WriteLine("[Display] X11");
     }
 
-    // ── private helpers ───────────────────────────────────────────────────────
+    // ── private ───────────────────────────────────────────────────────────────
 
-    // The sentinel file is written by setup-native-libs.py alongside the
-    // multi-platform libraylib.so.  Its presence is the only reliable signal
-    // that Wayland backend code is compiled into the running library.
-    private static bool WaylandLibPresent() =>
-        File.Exists(Path.Combine(AppContext.BaseDirectory, ".wayland-enabled"));
+    // BuildInfo.WaylandEnabled is a compile-time constant stamped by the
+    // GenerateBuildInfo MSBuild target.  It is true only when the binary was
+    // published for linux-x64 AND the Wayland-capable libraylib.so (built by
+    // setup-native-libs.py linux-wayland) was present at compile time.
+    //
+    // Using a constant instead of a sidecar sentinel file means Wayland
+    // detection works correctly regardless of how the binary is packaged or
+    // redistributed — no extra file to carry around.
+    private static bool WaylandLibPresent() => BuildInfo.WaylandEnabled;
 }

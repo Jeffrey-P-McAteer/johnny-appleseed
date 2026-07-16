@@ -30,14 +30,16 @@
   -->
   <Target Name="GenerateBuildInfo" BeforeTargets="CoreCompile">
 
-    <!-- ── version from version.txt at repo root ─────────────────────────── -->
+    <!-- ── version: YYYY.MM.(hours elapsed in month, UTC) ───────────────── -->
+    <!-- No version file to maintain. Format gives ~744 distinct values per  -->
+    <!-- month (31d × 24h) — enough for multiple releases per day.           -->
+    <!-- Examples: 2026.07.0  (July 1 00:xx UTC)                             -->
+    <!--           2026.07.375 (July 16 15:xx UTC)                           -->
     <PropertyGroup>
-      <_VersionFile>$(MSBuildThisFileDirectory)..\..\version.txt</_VersionFile>
-    </PropertyGroup>
-    <Error Condition="!Exists('$(_VersionFile)')"
-           Text="version.txt not found — expected at $(_VersionFile)" />
-    <PropertyGroup>
-      <_BuildVersion>$([System.IO.File]::ReadAllText("$(_VersionFile)").Trim())</_BuildVersion>
+      <_VDay>$([System.DateTime]::UtcNow.Day)</_VDay>
+      <_VHour>$([System.DateTime]::UtcNow.Hour)</_VHour>
+      <_VHoursInMonth>$([MSBuild]::Add($([MSBuild]::Multiply($([MSBuild]::Subtract($(_VDay), 1)), 24)), $(_VHour)))</_VHoursInMonth>
+      <_BuildVersion>$([System.DateTime]::UtcNow.ToString("yyyy")).$([System.DateTime]::UtcNow.ToString("MM")).$(_VHoursInMonth)</_BuildVersion>
     </PropertyGroup>
 
     <!-- ── UTC build timestamp ───────────────────────────────────────────── -->
@@ -74,9 +76,20 @@
       <_GitHash Condition="'$(_GitHash)' == ''">untracked</_GitHash>
     </PropertyGroup>
 
+    <!-- ── Wayland support flag ───────────────────────────────────────────── -->
+    <!-- True only when publishing for linux-x64 AND the multi-platform Wayland
+         libraylib.so (built by setup-native-libs.py linux-wayland) is present.
+         Baking this into the binary eliminates the need for a sidecar sentinel
+         file — the compiled constant survives any packaging scheme. -->
+    <PropertyGroup>
+      <_WaylandEnabled>false</_WaylandEnabled>
+      <_WaylandEnabled Condition="'$(RuntimeIdentifier)' == 'linux-x64' And
+                                   Exists('$(MSBuildThisFileDirectory)runtimes/linux-x64/native/libraylib.so')">true</_WaylandEnabled>
+    </PropertyGroup>
+
     <!-- ── write BuildInfo.cs to the intermediate output directory ──────── -->
     <MakeDir Directories="$(IntermediateOutputPath)" />
-    <!-- Notes on MSBuild item escaping used here:
+    <!-- Notes on MSBuild item escaping:
            %22 = "   %3B = ;   &lt; = <   &gt; = >
          MSBuild strips leading whitespace from Include values, so indentation
          is omitted — the C# compiler does not require it.
@@ -85,10 +98,11 @@
       <_BuildInfoLines Include="// &lt;auto-generated /&gt; - regenerated on every compile - do not edit" />
       <_BuildInfoLines Include="namespace JohnnyAppleseed%3B" />
       <_BuildInfoLines Include="static class BuildInfo {" />
-      <_BuildInfoLines Include="public const string Version   = %22$(_BuildVersion)%22%3B" />
-      <_BuildInfoLines Include="public const string BuildDate = %22$(_BuildDate)%22%3B" />
-      <_BuildInfoLines Include="public const string BuildHost = %22$(_BuildHost)%22%3B" />
-      <_BuildInfoLines Include="public const string GitHash   = %22$(_GitHash)%22%3B" />
+      <_BuildInfoLines Include="public const string Version      = %22$(_BuildVersion)%22%3B" />
+      <_BuildInfoLines Include="public const string BuildDate    = %22$(_BuildDate)%22%3B" />
+      <_BuildInfoLines Include="public const string BuildHost    = %22$(_BuildHost)%22%3B" />
+      <_BuildInfoLines Include="public const string GitHash      = %22$(_GitHash)%22%3B" />
+      <_BuildInfoLines Include="public const bool   WaylandEnabled = $(_WaylandEnabled)%3B" />
       <_BuildInfoLines Include="}" />
     </ItemGroup>
     <WriteLinesToFile
