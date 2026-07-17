@@ -40,6 +40,9 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
+# Pure-Python HFS+/UDIF DMG builder — no system dependencies
+from _dmg import build_dmg as _build_dmg_hfs
+
 # ── configuration ─────────────────────────────────────────────────────────────
 
 REPO_ROOT   = Path(__file__).resolve().parent.parent
@@ -259,16 +262,23 @@ def package_macos(target_name: str, rid: str) -> None:
 
 def create_dmg(staging: Path, output: Path, label: str) -> Path:
     """
-    Create a DMG from a staging directory.  Returns the actual output path,
-    which may differ from *output* if the Linux fallback produces a .zip.
-    On Linux we use genisoimage (HFS+ hybrid ISO) because hdiutil is macOS-only.
-    On macOS, hdiutil is preferred for a proper compressed UDIF image.
+    Create a .dmg from a staging directory.  Returns the output path.
+
+    On macOS: uses hdiutil for a compressed UDZO image (best quality).
+    On Linux (and as fallback): uses the pure-Python HFS+/UDIF builder in
+    _dmg.py — zero system dependencies, produces a valid UDRO Apple disk
+    image that macOS Disk Arbitration mounts natively.
     """
     if platform.system() == "Darwin":
-        _create_dmg_hdiutil(staging, output, label)
-        return output
-    else:
-        return _create_dmg_genisoimage(staging, output, label)
+        try:
+            _create_dmg_hdiutil(staging, output, label)
+            return output
+        except Exception as e:
+            print(f"  [warn] hdiutil failed ({e}); falling back to Python builder")
+
+    # Pure-Python path — works on Linux and as macOS fallback
+    _build_dmg_hfs(staging, output, label)
+    return output
 
 
 def _create_dmg_hdiutil(staging: Path, output: Path, label: str) -> None:
@@ -300,60 +310,6 @@ def _create_dmg_hdiutil(staging: Path, output: Path, label: str) -> None:
     os.unlink(rw_dmg)
 
 
-def _create_dmg_genisoimage(staging: Path, output: Path, label: str) -> Path:
-    tool = shutil.which("genisoimage") or shutil.which("mkisofs")
-    if tool is not None:
-        try:
-            # genisoimage uses single-dash for all options (including multi-char ones).
-            subprocess.run([
-                tool,
-                "-V", label[:32],
-                "-D", "-r",
-                "-hfs", "-hfs-volid", label[:27],
-                "-mac-name", "-no-pad", "-apple", "-probe",
-                "-o", str(output),
-                str(staging),
-            ], check=True, capture_output=True)
-            return output
-        except subprocess.CalledProcessError as e:
-            # genisoimage found but failed — likely compiled without HFS+ support
-            # (exit 255 is the common indicator).  Fall through to ZIP fallback.
-            print(
-                f"  [note] {Path(tool).name} failed (exit {e.returncode}); "
-                "HFS+ support may not be compiled in — falling back to ZIP archive"
-            )
-
-    # Fallback: ZIP containing the .app bundle.
-    # Named .zip (not .dmg) so the format is obvious — renaming a ZIP to .dmg
-    # produces a broken installer that Finder cannot mount.
-    # The Applications symlink is omitted; it is only meaningful inside a mounted DMG.
-    zip_output = output.with_suffix(".zip")
-    app_root = staging / f"{APP_NAME}.app"
-    with zipfile.ZipFile(zip_output, "w", zipfile.ZIP_DEFLATED) as zf:
-        for f in sorted(app_root.rglob("*")):
-            arc = f.relative_to(staging)
-            if f.is_symlink():
-                # Preserve symlinks (Unix mode 0o120777 in external_attr)
-                info = zipfile.ZipInfo(str(arc))
-                info.create_system = 3  # Unix
-                info.external_attr = (stat.S_IFLNK | 0o777) << 16
-                info.compress_type = zipfile.ZIP_STORED
-                zf.writestr(info, os.readlink(f))
-            elif f.is_file():
-                # ZipInfo.from_file preserves Unix mode (including executable bit)
-                info = zipfile.ZipInfo.from_file(f, arcname=str(arc))
-                info.compress_type = zipfile.ZIP_DEFLATED
-                with open(f, "rb") as fp:
-                    zf.writestr(info, fp.read())
-    print(
-        f"  [note] genisoimage/mkisofs not found or lacks HFS+ — produced a ZIP:\n"
-        f"         {zip_output.relative_to(REPO_ROOT)}\n"
-        "         For a proper .dmg:\n"
-        "           • Build on macOS (uses hdiutil automatically)\n"
-        "           • Or on Arch: paru -S cdrtools   (mkisofs with HFS+ support)\n"
-        "           • Or on Debian/Ubuntu: sudo apt install genisoimage"
-    )
-    return zip_output
 
 
 # ── DMG background image ──────────────────────────────────────────────────────
