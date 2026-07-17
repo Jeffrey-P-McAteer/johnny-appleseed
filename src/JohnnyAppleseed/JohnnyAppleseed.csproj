@@ -1,0 +1,252 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>JohnnyAppleseed</AssemblyName>
+    <RootNamespace>JohnnyAppleseed</RootNamespace>
+    <!-- Single-file publish with embedded native libs -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <!-- Suppress single-file IL stripping warnings from Raylib internals -->
+    <SuppressTrimAnalysisWarnings>true</SuppressTrimAnalysisWarnings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Raylib-cs" Version="8.0.0" />
+  </ItemGroup>
+
+  <!--
+    ══════════════════════════════════════════════════════════════════════════
+    Build-time stamp: generates obj/.../BuildInfo.cs before CoreCompile with
+    version (from version.txt), UTC timestamp, hostname, and git short hash.
+    The file is in obj/ so it is never checked into version control.
+    ══════════════════════════════════════════════════════════════════════════
+  -->
+  <Target Name="GenerateBuildInfo" BeforeTargets="CoreCompile">
+
+    <!-- ── version: YYYY.MM.(hours elapsed in month, UTC) ───────────────── -->
+    <!-- No version file to maintain. Format gives ~744 distinct values per  -->
+    <!-- month (31d × 24h) — enough for multiple releases per day.           -->
+    <!-- Examples: 2026.07.0  (July 1 00:xx UTC)                             -->
+    <!--           2026.07.375 (July 16 15:xx UTC)                           -->
+    <PropertyGroup>
+      <_VDay>$([System.DateTime]::UtcNow.Day)</_VDay>
+      <_VHour>$([System.DateTime]::UtcNow.Hour)</_VHour>
+      <_VHoursInMonth>$([MSBuild]::Add($([MSBuild]::Multiply($([MSBuild]::Subtract($(_VDay), 1)), 24)), $(_VHour)))</_VHoursInMonth>
+      <_BuildVersion>$([System.DateTime]::UtcNow.ToString("yyyy")).$([System.DateTime]::UtcNow.ToString("MM")).$(_VHoursInMonth)</_BuildVersion>
+    </PropertyGroup>
+
+    <!-- ── UTC build timestamp ───────────────────────────────────────────── -->
+    <PropertyGroup>
+      <_BuildDate>$([System.DateTime]::UtcNow.ToString("yyyy-MM-dd HH:mm:ss")) UTC</_BuildDate>
+    </PropertyGroup>
+
+    <!-- ── hostname ──────────────────────────────────────────────────────── -->
+    <Exec Command="hostname"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true"
+          StandardOutputImportance="low"
+          StandardErrorImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_BuildHostRaw" />
+    </Exec>
+    <PropertyGroup>
+      <!-- Prefer 'hostname' output; fall back to env vars (CI / Windows) -->
+      <_BuildHost Condition="'$(_BuildHostRaw)' != ''">$(_BuildHostRaw.Trim())</_BuildHost>
+      <_BuildHost Condition="'$(_BuildHost)' == '' And '$(COMPUTERNAME)' != ''">$(COMPUTERNAME)</_BuildHost>
+      <_BuildHost Condition="'$(_BuildHost)' == '' And '$(HOSTNAME)'    != ''">$(HOSTNAME)</_BuildHost>
+      <_BuildHost Condition="'$(_BuildHost)' == ''">unknown</_BuildHost>
+    </PropertyGroup>
+
+    <!-- ── git short hash ────────────────────────────────────────────────── -->
+    <Exec Command="git rev-parse --short HEAD"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true"
+          StandardOutputImportance="low"
+          StandardErrorImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_GitHashRaw" />
+    </Exec>
+    <PropertyGroup>
+      <_GitHash Condition="'$(_GitHashRaw)' != ''">$(_GitHashRaw.Trim())</_GitHash>
+      <_GitHash Condition="'$(_GitHash)' == ''">untracked</_GitHash>
+    </PropertyGroup>
+
+    <!-- ── Wayland support flag ───────────────────────────────────────────── -->
+    <!-- True only when publishing for linux-x64 AND the multi-platform Wayland
+         libraylib.so (built by setup-native-libs.py linux-wayland) is present.
+         Baking this into the binary eliminates the need for a sidecar sentinel
+         file — the compiled constant survives any packaging scheme. -->
+    <PropertyGroup>
+      <_WaylandEnabled>false</_WaylandEnabled>
+      <_WaylandEnabled Condition="'$(RuntimeIdentifier)' == 'linux-x64' And
+                                   Exists('$(MSBuildThisFileDirectory)runtimes/linux-x64/native/libraylib.so')">true</_WaylandEnabled>
+    </PropertyGroup>
+
+    <!-- ── write BuildInfo.cs to the intermediate output directory ──────── -->
+    <MakeDir Directories="$(IntermediateOutputPath)" />
+    <!-- Notes on MSBuild item escaping:
+           %22 = "   %3B = ;   &lt; = <   &gt; = >
+         MSBuild strips leading whitespace from Include values, so indentation
+         is omitted — the C# compiler does not require it.
+         Semicolons in code lines must be %3B or they split the item list.  -->
+    <ItemGroup>
+      <_BuildInfoLines Include="// &lt;auto-generated /&gt; - regenerated on every compile - do not edit" />
+      <_BuildInfoLines Include="namespace JohnnyAppleseed%3B" />
+      <_BuildInfoLines Include="static class BuildInfo {" />
+      <_BuildInfoLines Include="public const string Version      = %22$(_BuildVersion)%22%3B" />
+      <_BuildInfoLines Include="public const string BuildDate    = %22$(_BuildDate)%22%3B" />
+      <_BuildInfoLines Include="public const string BuildHost    = %22$(_BuildHost)%22%3B" />
+      <_BuildInfoLines Include="public const string GitHash      = %22$(_GitHash)%22%3B" />
+      <_BuildInfoLines Include="public const bool   WaylandEnabled = $(_WaylandEnabled)%3B" />
+      <_BuildInfoLines Include="}" />
+    </ItemGroup>
+    <WriteLinesToFile
+      File="$(IntermediateOutputPath)BuildInfo.cs"
+      Lines="@(_BuildInfoLines)"
+      Overwrite="true"
+      Encoding="UTF-8" />
+
+    <!-- Make the generated file visible to CoreCompile -->
+    <ItemGroup>
+      <Compile Include="$(IntermediateOutputPath)BuildInfo.cs" />
+    </ItemGroup>
+  </Target>
+
+  <!--
+    ══════════════════════════════════════════════════════════════════════════
+    Native library overrides
+    ══════════════════════════════════════════════════════════════════════════
+    Override / supplement native libs for RIDs missing from or improved beyond
+    the Raylib-cs NuGet package.  Files are only included when present on disk,
+    so a clean checkout builds fine with the NuGet defaults.
+
+    linux-x64 (Wayland):
+      Produced by `uv run scripts/setup-native-libs.py linux-wayland`.
+      Replaces the NuGet X11-only lib with a GLFW 3.4 multi-platform build
+      (both X11 and Wayland backends compiled in).
+      The sentinel .wayland-enabled is read at runtime by Platform/LinuxDisplay.cs
+      to decide whether to prefer Wayland over X11/XWayland.
+
+    linux-arm64, win-arm64:
+      Produced by `uv run scripts/setup-native-libs.py linux-arm64 win-arm64`.
+      RIDs absent from the Raylib-cs NuGet package.
+  -->
+  <ItemGroup>
+    <!-- linux-x64 Wayland lib overrides the NuGet X11-only copy -->
+    <Content Include="runtimes\linux-x64\native\libraylib.so"
+             Condition="Exists('runtimes\linux-x64\native\libraylib.so')">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <!-- Sentinel read by LinuxDisplay.WaylandLibPresent() at runtime -->
+    <Content Include="runtimes\linux-x64\native\.wayland-enabled"
+             Condition="Exists('runtimes\linux-x64\native\.wayland-enabled')">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+      <Link>.wayland-enabled</Link>
+    </Content>
+
+    <!-- linux-arm64: cross-compiled by setup-native-libs.py -->
+    <Content Include="runtimes\linux-arm64\native\libraylib.so"
+             Condition="Exists('runtimes\linux-arm64\native\libraylib.so')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+
+    <!-- win-arm64: downloaded by setup-native-libs.py -->
+    <Content Include="runtimes\win-arm64\native\raylib.dll"
+             Condition="Exists('runtimes\win-arm64\native\raylib.dll')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+
+    <!-- win-x64: optional override downloaded by setup-native-libs.py -->
+    <Content Include="runtimes\win-x64\native\raylib.dll"
+             Condition="Exists('runtimes\win-x64\native\raylib.dll')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+
+    <!-- osx-x64: optional override downloaded by setup-native-libs.py -->
+    <Content Include="runtimes\osx-x64\native\libraylib.dylib"
+             Condition="Exists('runtimes\osx-x64\native\libraylib.dylib')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+
+    <!-- osx-arm64: optional override downloaded by setup-native-libs.py -->
+    <Content Include="runtimes\osx-arm64\native\libraylib.dylib"
+             Condition="Exists('runtimes\osx-arm64\native\libraylib.dylib')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+  <!--
+    After NuGet stages native assets for publish, overwrite NuGet-provided libs
+    with locally-downloaded versions when present (placed by setup-native-libs.py).
+    Each target is RID-gated and file-existence-gated so a clean checkout is
+    unaffected and the NuGet defaults are used.
+  -->
+  <Target Name="OverrideWaylandLib"
+          AfterTargets="ResolveNativeAssets"
+          Condition="'$(RuntimeIdentifier)' == 'linux-x64' And
+                     Exists('$(MSBuildThisFileDirectory)runtimes\linux-x64\native\libraylib.so')">
+    <Message Text="Using Wayland-capable libraylib.so override" Importance="high" />
+    <ItemGroup>
+      <ResolvedNativeAssetToPublish Remove="@(ResolvedNativeAssetToPublish)"
+        Condition="'%(Filename)%(Extension)' == 'libraylib.so'" />
+      <ResolvedNativeAssetToPublish Include="$(MSBuildThisFileDirectory)runtimes\linux-x64\native\libraylib.so">
+        <DestinationSubPath>libraylib.so</DestinationSubPath>
+      </ResolvedNativeAssetToPublish>
+    </ItemGroup>
+  </Target>
+
+  <Target Name="OverrideWinX64Lib"
+          AfterTargets="ResolveNativeAssets"
+          Condition="'$(RuntimeIdentifier)' == 'win-x64' And
+                     Exists('$(MSBuildThisFileDirectory)runtimes\win-x64\native\raylib.dll')">
+    <Message Text="Using downloaded raylib.dll override for win-x64" Importance="high" />
+    <ItemGroup>
+      <ResolvedNativeAssetToPublish Remove="@(ResolvedNativeAssetToPublish)"
+        Condition="'%(Filename)%(Extension)' == 'raylib.dll'" />
+      <ResolvedNativeAssetToPublish Include="$(MSBuildThisFileDirectory)runtimes\win-x64\native\raylib.dll">
+        <DestinationSubPath>raylib.dll</DestinationSubPath>
+      </ResolvedNativeAssetToPublish>
+    </ItemGroup>
+  </Target>
+
+  <Target Name="OverrideOsxX64Lib"
+          AfterTargets="ResolveNativeAssets"
+          Condition="'$(RuntimeIdentifier)' == 'osx-x64' And
+                     Exists('$(MSBuildThisFileDirectory)runtimes\osx-x64\native\libraylib.dylib')">
+    <Message Text="Using downloaded libraylib.dylib override for osx-x64" Importance="high" />
+    <ItemGroup>
+      <ResolvedNativeAssetToPublish Remove="@(ResolvedNativeAssetToPublish)"
+        Condition="'%(Filename)%(Extension)' == 'libraylib.dylib'" />
+      <ResolvedNativeAssetToPublish Include="$(MSBuildThisFileDirectory)runtimes\osx-x64\native\libraylib.dylib">
+        <DestinationSubPath>libraylib.dylib</DestinationSubPath>
+      </ResolvedNativeAssetToPublish>
+    </ItemGroup>
+  </Target>
+
+  <Target Name="OverrideOsxArm64Lib"
+          AfterTargets="ResolveNativeAssets"
+          Condition="'$(RuntimeIdentifier)' == 'osx-arm64' And
+                     Exists('$(MSBuildThisFileDirectory)runtimes\osx-arm64\native\libraylib.dylib')">
+    <Message Text="Using downloaded libraylib.dylib override for osx-arm64" Importance="high" />
+    <ItemGroup>
+      <ResolvedNativeAssetToPublish Remove="@(ResolvedNativeAssetToPublish)"
+        Condition="'%(Filename)%(Extension)' == 'libraylib.dylib'" />
+      <ResolvedNativeAssetToPublish Include="$(MSBuildThisFileDirectory)runtimes\osx-arm64\native\libraylib.dylib">
+        <DestinationSubPath>libraylib.dylib</DestinationSubPath>
+      </ResolvedNativeAssetToPublish>
+    </ItemGroup>
+  </Target>
+
+</Project>

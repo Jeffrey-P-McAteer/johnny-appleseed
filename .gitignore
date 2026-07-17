@@ -1,0 +1,51 @@
+# .NET build output
+bin/
+obj/
+*.user
+
+# Distribution artifacts (produced by scripts/package.py)
+dist/
+
+# Cross-compile toolchain downloads and build artifacts (produced by scripts/setup-native-libs.py)
+build/
+
+# Downloaded / cross-compiled native libs for arm64 targets missing from the NuGet package.
+# Run `uv run scripts/setup-native-libs.py` to populate these.
+src/JohnnyAppleseed/runtimes/linux-arm64/
+src/JohnnyAppleseed/runtimes/win-arm64/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.uv/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# IDE / editors
+.vs/
+.vscode/settings.json
+.idea/
+*.suo
+*.sln.DotSettings.user
+.rider/
+
+# Secrets / local overrides
+*.local
+*.env
+
+# Misc
+*.dll
+*.so
+.wayland-enabled
+*.dylib
+
+
