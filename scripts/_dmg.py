@@ -673,11 +673,15 @@ def _make_udif_plist(blkx: list[dict]) -> bytes:
 # ── koly trailer ───────────────────────────────────────────────────────────────
 
 def _koly(data_fork_len: int, plist_offset: int, plist_len: int,
-          total_sectors: int, df_crc: int) -> bytes:
+          total_sectors: int, df_crc: int, master_crc: int) -> bytes:
     """
     512-byte UDIF koly trailer block.
-    imageVariant = 1 (kUDIFDeviceImageType) — disk image with GPT.
-    Both dataForkChecksum and masterChecksum are CRC32 of the data fork.
+    imageVariant = 1 (kUDIFDeviceImageType) — device disk image with GPT.
+
+    dataForkChecksum  = CRC32 of the data fork bytes (compressed sector data).
+    masterChecksum    = CRC32 of all per-partition mish checksums concatenated
+                        as big-endian uint32s, in blkx order.
+                        Verified against two real hdiutil-produced DMGs. ✓
     """
     def _ck(crc: int) -> bytes:
         # UDIFChecksum: type(4) + size_bits(4) + value(4) + zeros(124) = 136 bytes
@@ -694,7 +698,7 @@ def _koly(data_fork_len: int, plist_offset: int, plist_len: int,
         + _ck(df_crc)                                           # DataForkChecksum (136)
         + struct.pack(">QQ", plist_offset, plist_len)           # xmlOffset, xmlLength
         + b"\x00" * 120                                         # reserved
-        + _ck(df_crc)                                           # MasterChecksum (136)
+        + _ck(master_crc)                                       # MasterChecksum (136)
         + struct.pack(">IQ", 1, total_sectors)                  # variant=1, sectors
         + b"\x00" * 12                                          # reserved
     )
@@ -771,24 +775,30 @@ def build_dmg(staging: Path, output: Path, label: str) -> Path:
     # The coff values track the running byte offset in the data fork.
     coff = 0
     data_fork_parts = []
-    blkx           = []
+    blkx            = []
+    partition_cks: list[int] = []   # per-partition mish checksums (for masterCk)
 
     def _raw_chunk(raw: bytes, first_sec: int, sec_cnt: int,
                    blk_desc: int, name: str, entry_id: str) -> None:
         nonlocal coff
-        chunk = {"type": 0x00000001, "sec": 0, "cnt": sec_cnt,
-                 "coff": coff, "clen": len(raw)}
-        blkx.append(_blkx_entry(name, entry_id,
-                                 _mish(first_sec, sec_cnt, blk_desc, [chunk], raw)))
+        chunk    = {"type": 0x00000001, "sec": 0, "cnt": sec_cnt,
+                    "coff": coff, "clen": len(raw)}
+        mish_data = _mish(first_sec, sec_cnt, blk_desc, [chunk], raw)
+        blkx.append(_blkx_entry(name, entry_id, mish_data))
+        # mish checksum (CRC32 of raw sector bytes) is at offset 72 of the mish block
+        partition_cks.append(struct.unpack_from(">I", mish_data, 72)[0])
         data_fork_parts.append(raw)
         coff += len(raw)
 
     def _ignore_chunk(first_sec: int, sec_cnt: int,
                       blk_desc: int, name: str, entry_id: str) -> None:
-        chunk = {"type": 0x00000002, "sec": 0, "cnt": sec_cnt, "coff": coff, "clen": 0}
-        raw = b"\x00" * (sec_cnt * 512)   # decompressed = all zeros
-        blkx.append(_blkx_entry(name, entry_id,
-                                 _mish(first_sec, sec_cnt, blk_desc, [chunk], raw)))
+        # IGNORE chunks store 0 bytes in the data fork (clen=0), so
+        # their mish checksum = CRC32(b"") = 0 — NOT CRC32 of zero bytes.
+        # Verified against hdiutil: "calculated CRC32 $00000000" for Apple_Free.
+        chunk    = {"type": 0x00000002, "sec": 0, "cnt": sec_cnt, "coff": coff, "clen": 0}
+        mish_data = _mish(first_sec, sec_cnt, blk_desc, [chunk], b"")
+        blkx.append(_blkx_entry(name, entry_id, mish_data))
+        partition_cks.append(0)   # CRC32(b"") == 0
         # No bytes added to data fork for IGNORE
 
     # Entry -1 (blk_desc=0): Protective MBR, 1 sector
@@ -834,11 +844,18 @@ def build_dmg(staging: Path, output: Path, label: str) -> Path:
     data_fork = b"".join(data_fork_parts)
     df_crc    = zlib.crc32(data_fork) & 0xFFFFFFFF
 
+    # masterChecksum = CRC32 of all per-partition checksums concatenated as
+    # big-endian uint32s (in blkx order).  Verified against two real hdiutil DMGs:
+    # - OpenJoystickDriver 0.4.1: computed 0x5d7b1dd2, stored 0x5d7b1dd2 ✓
+    # - Our DMG with corrected Apple_Free cks: computed 0xde745ae3 ✓
+    ck_seq      = b"".join(struct.pack(">I", c) for c in partition_cks)
+    master_crc  = zlib.crc32(ck_seq) & 0xFFFFFFFF
+
     # ── 5. plist and koly ─────────────────────────────────────────────────────
     plist_bytes  = _make_udif_plist(blkx)
     plist_offset = len(data_fork)
     koly_block   = _koly(len(data_fork), plist_offset, len(plist_bytes),
-                         total_sectors, df_crc)
+                         total_sectors, df_crc, master_crc)
 
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_bytes(data_fork + plist_bytes + koly_block)
