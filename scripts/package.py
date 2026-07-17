@@ -264,10 +264,10 @@ def create_dmg(staging: Path, output: Path, label: str) -> Path:
     """
     Create a .dmg from a staging directory.  Returns the output path.
 
-    On macOS: uses hdiutil for a compressed UDZO image (best quality).
-    On Linux (and as fallback): uses the pure-Python HFS+/UDIF builder in
-    _dmg.py — zero system dependencies, produces a valid UDRO Apple disk
-    image that macOS Disk Arbitration mounts natively.
+    Priority order:
+      macOS  → hdiutil   (compressed UDZO, highest quality)
+      Linux  → mkisofs   (cdrtools, HFS+/ISO hybrid; install: paru -S cdrtools)
+      any    → pure-Python HFS+/UDIF builder (zero system dependencies)
     """
     if platform.system() == "Darwin":
         try:
@@ -275,10 +275,51 @@ def create_dmg(staging: Path, output: Path, label: str) -> Path:
             return output
         except Exception as e:
             print(f"  [warn] hdiutil failed ({e}); falling back to Python builder")
+    else:
+        # Try mkisofs (cdrtools) first — it handles the full HFS+ filesystem
+        # creation and file copying in one step, with no root access required.
+        mkisofs = shutil.which("mkisofs") or shutil.which("genisoimage")
+        if mkisofs:
+            try:
+                _create_dmg_mkisofs(mkisofs, staging, output, label)
+                return output
+            except Exception as e:
+                print(f"  [warn] {Path(mkisofs).name} failed ({e}); falling back to Python builder")
 
-    # Pure-Python path — works on Linux and as macOS fallback
+    # Pure-Python fallback — zero system dependencies, works everywhere.
+    print("  [info] using pure-Python HFS+/UDIF builder")
     _build_dmg_hfs(staging, output, label)
     return output
+
+
+def _create_dmg_mkisofs(tool: str, staging: Path, output: Path, label: str) -> None:
+    """
+    Create a macOS-compatible HFS+/ISO hybrid disk image using mkisofs (cdrtools).
+
+    cdrtools mkisofs embeds a proper HFS+ partition inside an ISO 9660 container.
+    macOS Disk Arbitration mounts the HFS+ partition natively, giving the same
+    drag-to-Applications Finder window experience as a native UDIF DMG.
+    Symlinks, hidden files (.DS_Store, .background), and file permissions are
+    all preserved via the -apple and -probe flags.
+    """
+    # Label max 27 chars for HFS volume name
+    vol = label[:27]
+    subprocess.run(
+        [
+            tool,
+            "-V", vol,      # volume name
+            "-D",           # disable deep directory relocation
+            "-hfs",         # embed an HFS+ partition
+            "-mac-name",    # use Mac-style file name encoding
+            "-no-pad",      # omit 300-sector ISO padding at end
+            "-apple",       # Apple ISO 9660 extensions (preserves symlinks, FinderInfo)
+            "-probe",       # probe file type / creator automatically
+            "-o", str(output),
+            str(staging),
+        ],
+        check=True,
+        capture_output=True,
+    )
 
 
 def _create_dmg_hdiutil(staging: Path, output: Path, label: str) -> None:
