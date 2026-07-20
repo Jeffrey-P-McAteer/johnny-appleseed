@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/JohnnyAppleseed/JohnnyAppleseed.csproj" />
+    <Project Path="src/JohnnyAppleseed.Probe/JohnnyAppleseed.Probe.csproj" />
   </Folder>
 </Solution>

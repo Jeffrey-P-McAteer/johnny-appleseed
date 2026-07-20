@@ -208,6 +208,9 @@ static class InputSystem
     /// <summary>Whether a gamepad is currently connected and active.</summary>
     public static bool IsGamepadConnected => _active >= 0;
 
+    /// <summary>Slot of the resolved active gamepad, or -1 if none. Diagnostics/tools.</summary>
+    public static int ActiveGamepad => _active;
+
     /// <summary>Human-readable name of the active gamepad, or "" if none.</summary>
     public static string GamepadName =>
         _active >= 0 ? (Raylib.GetGamepadName_(_active) ?? "") : "";

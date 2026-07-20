@@ -118,6 +118,37 @@ dotnet run --project src/JohnnyAppleseed/JohnnyAppleseed.csproj -- --capture-int
 dotnet run --project src/JohnnyAppleseed/JohnnyAppleseed.csproj -- --capture-menu 1 menu.png
 ```
 
+### Hardware probe (`src/JohnnyAppleseed.Probe`)
+
+A separate **debug-only** binary for measuring what real controllers actually do.
+It references the game project and reuses its input layer (`InputSystem`, app-data
+paths, build stamp) but swaps in measurement logic instead of the game loop, so
+what it reports is exactly what the game sees. It is intentionally *not* part of
+the cross-platform packaging pipeline — it is a plain local exe you build on the
+machine under test.
+
+Run it via the uv-style wrapper:
+
+```bash
+uv run scripts/probe.py            # interactive: live gamepad state + edge log
+uv run scripts/probe.py list       # enumerate gamepads (raylib) + input devices (Linux)
+uv run scripts/probe.py raw        # raw kernel events from /dev/input/js0
+uv run scripts/probe.py raw /dev/input/js1
+uv run scripts/probe.py -c Release # choose build config (default: Debug)
+```
+
+- **interactive** opens a window and logs every button/axis edge to the console
+  with its Raylib code (the same number the game maps against), while showing the
+  active gamepad and the resolved logical actions live — a direct proof that
+  hot-plug and button mapping work on your hardware.
+- **list** correlates the kernel's device view with what Raylib enumerates.
+- **raw** reads the Linux joystick device directly, bypassing Raylib, to show the
+  ground-truth kernel button/axis numbers (needs read access to `/dev/input/jsN`;
+  add yourself to the `input` group if you hit a permission error).
+
+The game exposes its internals to the probe via `<InternalsVisibleTo>`; this is
+tooling-only and does not affect the shipped build.
+
 ### App data path (`AppData.cs`)
 
 On first run the game creates a platform-appropriate folder for save data and preferences:

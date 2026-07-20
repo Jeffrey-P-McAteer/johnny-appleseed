@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    ══════════════════════════════════════════════════════════════════════════
+    Hardware-probe binary.
+
+    A throwaway *debug* tool that reuses the real game's code (input layer,
+    app-data paths, build stamp) but replaces Main() with measurement logic —
+    used to prove what a real controller reports (raw button/axis codes, which
+    slot it enumerates on, whether the game's InputSystem picks it up).
+
+    Deliberately NOT part of the cross-platform build/package pipeline: it is a
+    plain framework-dependent exe meant to run on whatever machine we are testing
+    on. No single-file / self-contained / RID juggling.
+    ══════════════════════════════════════════════════════════════════════════
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>JohnnyAppleseed.Probe</AssemblyName>
+    <RootNamespace>JohnnyAppleseed.Probe</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Reuse the game's classes (InputSystem, AppData, BuildInfo, …). The game
+         exposes its internals to this assembly via <InternalsVisibleTo>. -->
+    <ProjectReference Include="..\JohnnyAppleseed\JohnnyAppleseed.csproj" />
+
+    <!-- Direct reference so Raylib's native lib is resolved into our output for
+         the local RID, independent of the game's publish-time native handling. -->
+    <PackageReference Include="Raylib-cs" Version="8.0.0" />
+  </ItemGroup>
+
+</Project>

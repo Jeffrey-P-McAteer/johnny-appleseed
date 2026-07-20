@@ -8,17 +8,34 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>JohnnyAppleseed</AssemblyName>
     <RootNamespace>JohnnyAppleseed</RootNamespace>
-    <!-- Single-file publish with embedded native libs -->
-    <PublishSingleFile>true</PublishSingleFile>
-    <SelfContained>true</SelfContained>
-    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <!-- Suppress single-file IL stripping warnings from Raylib internals -->
     <SuppressTrimAnalysisWarnings>true</SuppressTrimAnalysisWarnings>
   </PropertyGroup>
 
+  <!--
+    Single-file / self-contained packaging. Gated on a RuntimeIdentifier being
+    present so it applies during RID-targeted publish (scripts/package.py, or a
+    manual `dotnet publish -r <rid>`) but NOT during a plain `dotnet build`/run
+    or when this project is referenced by another (e.g. the debug probe).
+    A self-contained exe cannot be referenced by a framework-dependent one
+    (NETSDK1151); keeping these off without a RID makes the reference legal while
+    leaving the shipped build byte-for-byte the same.
+  -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Raylib-cs" Version="8.0.0" />
+  </ItemGroup>
+
+  <!-- Let the debug hardware-probe reuse internal classes (InputSystem, AppData,
+       BuildInfo, …). Test/tooling access only; does not affect the shipped game. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="JohnnyAppleseed.Probe" />
   </ItemGroup>
 
   <!--
