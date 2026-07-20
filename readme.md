@@ -38,26 +38,41 @@ Mouse clicks are handled directly in scenes — they need spatial context (the c
 
 The **ShortcutLeft / ShortcutRight** actions (LB/RB bumpers, Q/E on keyboard) are reserved for single-key navigation to any menu that would otherwise require multiple arrow + Enter presses.  Wire them into new scenes as those menus are built.
 
-#### Gamepad hot-plugging
+#### Dynamic gamepad tracking
 
-Controllers can be connected or disconnected at any time — including after the
-game has started — and are picked up automatically.  Rather than assume a fixed
-slot, `InputSystem.Update()` resolves an *active gamepad* each frame by scanning
-all slots: it keeps the current pad while it stays connected, re-scans when that
-pad is unplugged, and adopts the first available pad otherwise.  This is why a
-controller that enumerates on a non-zero slot (or is plugged in mid-game) works
-identically to one present at launch — there is no hardcoded slot 0.  Connect and
-disconnect events are logged to stderr.
+Controllers can be connected or disconnected at any time — including mid-game —
+and are picked up automatically. The catch: operating systems routinely report
+**non-controllers as "gamepads"** (laptop touchpads, lid sensors, virtual/`uinput`
+devices), and they can sit on low slots and never disconnect. Trusting slot order
+means a phantom device silently hijacks input.
 
-If a controller is *detected but its buttons do nothing* (a common Linux case
-where GLFW's built-in SDL mapping table predates the controller), drop an
-up-to-date [`gamecontrollerdb.txt`](https://github.com/mdqinc/SDL_GameControllerDB)
-next to the executable or in the app-data folder — `InputSystem.Initialize()`
-loads it via `SetGamepadMappings()` at startup.  Missing file is not an error;
-GLFW's built-in mappings already cover most mainstream controllers.
+So `InputSystem.Update()` tracks **all four slots at once**. Each frame it counts
+real input *events* per slot — button-press edges and stick/trigger dead-zone
+crossings — over a rolling **30-second** window. For the many APIs that need a
+single controller, the *active* pad is chosen as:
 
-The hot-plug selection policy (`InputSystem.ResolveActiveGamepad`) is pure and
-unit-tested headlessly:
+1. the slot with the **most events in the last 30 s** (the pad you're actually
+   using), else
+2. on a tie or when nobody has produced events, the **least-virtual** slot — the
+   one most likely to be a real gamepad, judged by name and axis-count *heuristics*
+   (best-effort guesses, explicitly labelled as such; Raylib exposes no vendor ID),
+   else
+3. the current pad (stability), else the lowest slot.
+
+The result: an idle touchpad never steals focus, and the instant you press a
+button on a real controller it becomes active — on any slot, at any time. Active
+changes are logged to stderr, and per-slot event counts are visible live in the
+[hardware probe](#hardware-probe-srcjohnnyappleseedprobe).
+
+If a controller is *detected but its buttons do nothing* (a Linux case where
+GLFW's built-in SDL mapping table predates the controller), drop an up-to-date
+[`gamecontrollerdb.txt`](https://github.com/mdqinc/SDL_GameControllerDB) next to
+the executable or in the app-data folder — `InputSystem.Initialize()` loads it via
+`SetGamepadMappings()` at startup. Missing file is not an error; GLFW's built-in
+mappings already cover most mainstream controllers.
+
+The selection policy (`InputSystem.SelectActiveGamepad`) is pure and unit-tested
+headlessly:
 
 ```bash
 dotnet run --project src/JohnnyAppleseed/JohnnyAppleseed.csproj -- --selftest-input

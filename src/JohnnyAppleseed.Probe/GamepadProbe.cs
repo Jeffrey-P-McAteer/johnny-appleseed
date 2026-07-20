@@ -190,7 +190,13 @@ static class GamepadProbe
         {
             if (!Raylib.IsGamepadAvailable(slot)) continue;
             any = true;
-            Line($"  gp{slot}: {Raylib.GetGamepadName_(slot)}", white, 18);
+            // Show how the game's InputSystem sees this slot: the rolling 30s event
+            // count that drives selection, and whether it is the chosen active pad.
+            bool isActive = InputSystem.ActiveGamepad == slot;
+            string tag = isActive ? "  ← ACTIVE" : "";
+            Line($"  gp{slot}: {Raylib.GetGamepadName_(slot)}   " +
+                 $"[events/30s: {InputSystem.RecentEventCount(slot)}]{tag}",
+                 isActive ? green : white, 18);
 
             int lastPressed = Raylib.GetGamepadButtonPressed();
             if (lastPressed > 0)

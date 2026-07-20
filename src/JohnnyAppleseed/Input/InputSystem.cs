@@ -3,26 +3,31 @@ using Raylib_cs;
 namespace JohnnyAppleseed.Input;
 
 /// <summary>
-/// Unified input layer: keyboard, gamepad, and (for spatial queries) mouse.
+/// Unified, hot-plug-aware input layer: keyboard, gamepad, and (for spatial
+/// queries) mouse.
 ///
 /// Call <see cref="Initialize"/> once after the window is created, then
 /// <see cref="Update"/> once at the top of each game-loop iteration before any
-/// scene logic runs.  Scenes query logical actions via <see cref="IsPressed"/> /
+/// scene logic runs. Scenes query logical actions via <see cref="IsPressed"/> /
 /// <see cref="IsDown"/> rather than polling Raylib directly.
 ///
-/// ── Gamepad hot-plugging ────────────────────────────────────────────────────
-/// Controllers may be connected or disconnected at any time.  Rather than assume
-/// a fixed slot, <see cref="Update"/> resolves an <em>active gamepad</em> every
-/// frame by scanning all slots (<see cref="MaxGamepads"/>):
+/// ── Dynamic multi-gamepad tracking ──────────────────────────────────────────
+/// All <see cref="MaxGamepads"/> slots are tracked simultaneously, because the OS
+/// happily reports non-controllers (laptop touchpads, lid sensors, virtual
+/// devices) as "gamepads" and they can occupy low slots. Rather than trust slot
+/// order, each frame we count real input <em>events</em> (button-press edges and
+/// stick/trigger dead-zone crossings) per slot over a rolling
+/// <see cref="WindowSeconds"/>-second window.
 ///
-///   • It keeps the current active pad while that slot stays available (stable,
-///     so input never jumps between two connected pads).
-///   • If the active pad vanishes (unplugged), it re-scans for another.
-///   • If none was active, the first available slot is adopted (plug-after-start).
-///
-/// This is why every button/axis query uses the resolved <see cref="_active"/>
-/// index and never a hardcoded slot 0 — a controller enumerating on slot 1+ (or
-/// plugged in mid-game) works exactly the same as one present at launch.
+/// For the (many) APIs that need a single controller, the <em>active</em> pad is:
+///   1. the slot with the most events in the last 30 s (the pad you're using), else
+///   2. on a tie or when nobody has produced any events, the "least-virtual" slot —
+///      the one most likely to be a real gamepad, judged by name and axis-count
+///      heuristics (see <see cref="EstimateRealness"/>; these are guesses, not
+///      authoritative identification), else
+///   3. the current pad (stability), else the lowest slot.
+/// The upshot: an idle touchpad never steals focus, and the instant you press a
+/// button on a real controller it becomes active — on any slot, at any time.
 ///
 /// Mouse clicks are intentionally not mapped here — they carry spatial context
 /// (position) that the scene needs to resolve anyway.
@@ -30,40 +35,94 @@ namespace JohnnyAppleseed.Input;
 static class InputSystem
 {
     // ── constants ─────────────────────────────────────────────────────────────
-    private const int   MaxGamepads   = 4;      // raylib's default MAX_GAMEPADS
-    private const float AxisThreshold = 0.5f;   // dead-zone threshold
     private const int   NoGamepad     = -1;
+    private const int   MaxGamepads   = 4;      // raylib's default MAX_GAMEPADS
+    private const float WindowSeconds = 30f;    // rolling event-count window
+    private const float AxisThreshold = 0.5f;   // dead-zone: nav + event "engage"
+    private const float AxisRelease   = 0.35f;  // event "disengage" (hysteresis)
+
+    // Buttons/axes scanned every frame for event counting.
+    private static readonly GamepadButton[] AllButtons =
+        Enum.GetValues<GamepadButton>().Where(b => b != GamepadButton.Unknown).ToArray();
+    private static readonly GamepadAxis[] AllAxes = Enum.GetValues<GamepadAxis>();
+
+    // Heuristic name hints for the least-virtual tie-break. NOT authoritative —
+    // device names vary by OS, driver, and locale; treat as a best-effort guess.
+    private static readonly string[] VirtualNameHints =
+    {
+        "touchpad", "trackpad", "mouse", "keyboard", "consumer control",
+        "system control", "accelerometer", "gyro", "power button", "sleep button",
+        "video bus", "virtual", "uinput", "pc speaker", "headset", "webcam",
+    };
+    private static readonly string[] RealNameHints =
+    {
+        "xbox", "x-box", "360", "gamepad", "game pad", "controller", "joystick",
+        "joypad", "dualshock", "dualsense", "playstation", "nintendo", "switch",
+        "joy-con", "pro controller", "8bitdo", "logitech", "razer", "steam",
+        "wheel", "gravis", "saitek", "thrustmaster",
+    };
 
     // ── state ─────────────────────────────────────────────────────────────────
-    private static int   _active = NoGamepad;   // resolved active gamepad slot, or -1
-    private static float _axisLX, _axisLY;      // current frame
-    private static float _pLX,    _pLY;         // previous frame (for edge detection)
+    private static int _active = NoGamepad;                 // resolved active slot, or -1
+    private static readonly bool[] _available = new bool[MaxGamepads];
+
+    private static float _axisLX, _axisLY;                  // active-pad nav axes, this frame
+    private static float _pLX, _pLY;                        // previous frame (edge detection)
+
+    // Per-slot event tracking (all four tracked at once).
+    private static readonly Queue<double>[] _eventTimes =
+        MakeArray(() => new Queue<double>());
+    private static readonly HashSet<GamepadButton>[] _btnDown =
+        MakeArray(() => new HashSet<GamepadButton>());
+    private static readonly HashSet<GamepadAxis>[] _axisEngaged =
+        MakeArray(() => new HashSet<GamepadAxis>());
+
+    private static T[] MakeArray<T>(Func<T> factory)
+    {
+        var a = new T[MaxGamepads];
+        for (int i = 0; i < MaxGamepads; i++) a[i] = factory();
+        return a;
+    }
 
     // ── lifecycle ─────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// One-time setup after <c>InitWindow</c>.  Loads an up-to-date SDL gamepad
+    /// One-time setup after <c>InitWindow</c>. Loads an up-to-date SDL gamepad
     /// mapping database if one is shipped alongside the game, so controllers newer
-    /// than GLFW's built-in table still map their face buttons correctly (the
-    /// classic "controller detected but A/B do nothing" case on Linux).
+    /// than GLFW's built-in table still map their face buttons correctly.
     /// </summary>
-    public static void Initialize()
-    {
-        TryLoadGamepadMappings();
-    }
+    public static void Initialize() => TryLoadGamepadMappings();
 
     /// <summary>Advance the input state; must be called once per frame.</summary>
     public static void Update()
     {
+        double now = Raylib.GetTime();
         int previous = _active;
-        _active = ResolveActiveGamepad(_active, IsSlotAvailable, MaxGamepads);
 
+        var candidates = new GamepadCandidate[MaxGamepads];
+        for (int slot = 0; slot < MaxGamepads; slot++)
+        {
+            bool avail = Raylib.IsGamepadAvailable(slot);
+            _available[slot] = avail;
+
+            if (avail)
+                DetectEvents(slot, now);
+            else
+                ResetEdgeState(slot);   // so a reconnect can't emit a phantom edge
+
+            PruneWindow(slot, now);
+
+            candidates[slot] = new GamepadCandidate(
+                slot, avail, _eventTimes[slot].Count, avail ? EstimateRealness(slot) : 0);
+        }
+
+        _active = SelectActiveGamepad(candidates, _active);
         if (_active != previous)
             OnActiveGamepadChanged(previous, _active);
 
+        // Nav axes for the active pad (edge detection for menu movement).
         _pLX = _axisLX;
         _pLY = _axisLY;
-
         if (_active >= 0)
         {
             _axisLX = Raylib.GetGamepadAxisMovement(_active, GamepadAxis.LeftX);
@@ -75,24 +134,134 @@ static class InputSystem
         }
     }
 
+    // ── active-pad selection (pure, unit-tested) ────────────────────────────────
+
+    /// <summary>A per-slot snapshot fed to <see cref="SelectActiveGamepad"/>.</summary>
+    internal readonly record struct GamepadCandidate(
+        int Slot, bool Available, int RecentEventCount, int Realness);
+
     /// <summary>
-    /// Pure gamepad-selection policy, separated from Raylib so it can be unit
-    /// tested.  Keeps <paramref name="current"/> while it stays available;
-    /// otherwise returns the lowest available slot, or -1 when none are.
+    /// Choose the single active gamepad from a snapshot of all slots. Pure — no
+    /// Raylib — so the full policy is testable without hardware. Preference order:
+    /// most recent events → higher realness → current pad (stability) → lowest slot.
     /// </summary>
-    internal static int ResolveActiveGamepad(int current, Func<int, bool> isAvailable, int max)
+    internal static int SelectActiveGamepad(IReadOnlyList<GamepadCandidate> candidates, int current)
     {
-        if (current >= 0 && current < max && isAvailable(current))
-            return current;
+        GamepadCandidate? best = null;
+        foreach (var c in candidates)
+        {
+            if (!c.Available) continue;
+            if (best is null || Prefer(c, best.Value, current))
+                best = c;
+        }
+        return best?.Slot ?? NoGamepad;
+    }
 
-        for (int i = 0; i < max; i++)
-            if (isAvailable(i))
-                return i;
+    private static bool Prefer(GamepadCandidate a, GamepadCandidate b, int current)
+    {
+        if (a.RecentEventCount != b.RecentEventCount) return a.RecentEventCount > b.RecentEventCount;
+        if (a.Realness != b.Realness)                 return a.Realness > b.Realness;
+        if (a.Slot == current) return true;   // keep current on a full tie (no flip-flop)
+        if (b.Slot == current) return false;
+        return a.Slot < b.Slot;
+    }
 
-        return NoGamepad;
+    // ── per-slot event tracking ─────────────────────────────────────────────────
+
+    // Count a button-press edge or a dead-zone crossing as one "event".
+    private static void DetectEvents(int slot, double now)
+    {
+        var down = _btnDown[slot];
+        foreach (GamepadButton b in AllButtons)
+        {
+            bool isDown = Raylib.IsGamepadButtonDown(slot, b);
+            if (isDown && down.Add(b))       // Add == true → newly pressed this frame
+                Record(slot, now);
+            else if (!isDown)
+                down.Remove(b);
+        }
+
+        var engaged = _axisEngaged[slot];
+        foreach (GamepadAxis ax in AllAxes)
+        {
+            float v = MathF.Abs(Raylib.GetGamepadAxisMovement(slot, ax));
+            bool was = engaged.Contains(ax);
+            // Hysteresis: engage at the threshold, release lower, so jitter near
+            // the edge doesn't spam events.
+            bool nowEngaged = was ? v >= AxisRelease : v >= AxisThreshold;
+
+            if (nowEngaged && !was) { engaged.Add(ax); Record(slot, now); }
+            else if (!nowEngaged && was) engaged.Remove(ax);
+        }
+    }
+
+    private static void Record(int slot, double now) => _eventTimes[slot].Enqueue(now);
+
+    private static void PruneWindow(int slot, double now)
+    {
+        var q = _eventTimes[slot];
+        double cutoff = now - WindowSeconds;
+        while (q.Count > 0 && q.Peek() < cutoff)
+            q.Dequeue();
+    }
+
+    private static void ResetEdgeState(int slot)
+    {
+        _btnDown[slot].Clear();
+        _axisEngaged[slot].Clear();
+    }
+
+    // Heuristic "least-virtual" score — higher means more likely a real, physical
+    // gamepad. Based only on the device NAME and axis count (the only identifying
+    // signals Raylib exposes); this is a guess, not authoritative identification.
+    private static int EstimateRealness(int slot)
+    {
+        string name = (Raylib.GetGamepadName_(slot) ?? "").ToLowerInvariant();
+
+        int score = 0;
+        if (VirtualNameHints.Any(name.Contains)) score -= 100;
+        if (RealNameHints.Any(name.Contains))    score += 100;
+
+        // Real controllers have two sticks + triggers (≥4 axes); a lid sensor or
+        // touchpad masquerading as a pad usually has 0–1.
+        int axes = Raylib.GetGamepadAxisCount(slot);
+        if (axes >= 4) score += 20;
+        else if (axes <= 1) score -= 20;
+
+        return score;
     }
 
     // ── public API ────────────────────────────────────────────────────────────
+
+    /// <summary>Whether a gamepad is currently connected and active.</summary>
+    public static bool IsGamepadConnected => _active >= 0;
+
+    /// <summary>Slot of the resolved active gamepad, or -1 if none.</summary>
+    public static int ActiveGamepad => _active;
+
+    /// <summary>Human-readable name of the active gamepad, or "" if none.</summary>
+    public static string GamepadName =>
+        _active >= 0 ? (Raylib.GetGamepadName_(_active) ?? "") : "";
+
+    /// <summary>Slots currently reporting as available (up to four).</summary>
+    public static IReadOnlyList<int> ConnectedGamepads
+    {
+        get
+        {
+            var list = new List<int>(MaxGamepads);
+            for (int i = 0; i < MaxGamepads; i++)
+                if (_available[i]) list.Add(i);
+            return list;
+        }
+    }
+
+    /// <summary>Events counted for a slot within the rolling window. Diagnostics/tools.</summary>
+    public static int RecentEventCount(int slot) =>
+        (uint)slot < MaxGamepads ? _eventTimes[slot].Count : 0;
+
+    /// <summary>Name of a specific slot's device, or "" if that slot is empty.</summary>
+    public static string GamepadNameFor(int slot) =>
+        (uint)slot < MaxGamepads && _available[slot] ? (Raylib.GetGamepadName_(slot) ?? "") : "";
 
     /// <summary>
     /// True on the frame the action transitions from inactive to active.
@@ -205,27 +374,15 @@ static class InputSystem
         };
     }
 
-    /// <summary>Whether a gamepad is currently connected and active.</summary>
-    public static bool IsGamepadConnected => _active >= 0;
-
-    /// <summary>Slot of the resolved active gamepad, or -1 if none. Diagnostics/tools.</summary>
-    public static int ActiveGamepad => _active;
-
-    /// <summary>Human-readable name of the active gamepad, or "" if none.</summary>
-    public static string GamepadName =>
-        _active >= 0 ? (Raylib.GetGamepadName_(_active) ?? "") : "";
-
     // ── helpers ───────────────────────────────────────────────────────────────
-
-    private static bool IsSlotAvailable(int slot) => Raylib.IsGamepadAvailable(slot);
 
     private static void OnActiveGamepadChanged(int previous, int active)
     {
         if (active >= 0)
             Console.Error.WriteLine(
-                $"[input] gamepad connected: slot {active} \"{Raylib.GetGamepadName_(active)}\"");
+                $"[input] active gamepad → slot {active} \"{Raylib.GetGamepadName_(active)}\"");
         else if (previous >= 0)
-            Console.Error.WriteLine("[input] gamepad disconnected; using keyboard/mouse");
+            Console.Error.WriteLine("[input] no active gamepad; using keyboard/mouse");
 
         // Discard any stale axis reading from the previous device so switching
         // controllers can't emit a phantom navigation edge on the first frame.
@@ -239,7 +396,7 @@ static class InputSystem
             : curr >  AxisThreshold && prev <=  AxisThreshold;
 
     // Load a shipped gamecontrollerdb.txt (SDL mapping database) if present next
-    // to the executable or in the app-data folder.  Missing file is not an error:
+    // to the executable or in the app-data folder. Missing file is not an error:
     // GLFW's built-in mappings still cover most mainstream controllers.
     private static void TryLoadGamepadMappings()
     {
