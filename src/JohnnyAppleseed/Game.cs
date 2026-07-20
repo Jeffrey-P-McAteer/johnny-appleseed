@@ -31,6 +31,10 @@ static class Game
         Raylib.SetWindowMinSize(640, 360);
         Raylib.SetTargetFPS(60);
 
+        // Load gamepad mappings now that GLFW is up; controllers are resolved
+        // dynamically each frame in InputSystem.Update (hot-plug aware).
+        InputSystem.Initialize();
+
         IScene scene = new MainMenuScene();
         scene.Load();
 

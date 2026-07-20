@@ -1,0 +1,49 @@
+using Raylib_cs;
+using JohnnyAppleseed.Input;
+using JohnnyAppleseed.Scenes;
+
+namespace JohnnyAppleseed.Dev;
+
+/// <summary>
+/// Developer aid: renders a scene for a fixed amount of simulated time and writes
+/// a PNG screenshot, then exits — no user interaction. Handy for eyeballing UI
+/// (e.g. the intro typewriter mid-reveal) in a headless/CI context.
+///
+/// Invoked via <c>JohnnyAppleseed --capture-intro [seconds] [out.png]</c>.
+/// </summary>
+static class Capture
+{
+    public static int Run(string scene, float seconds, string outPath)
+    {
+        AppData.Initialize();
+        Raylib.SetConfigFlags(ConfigFlags.ResizableWindow);
+        Raylib.InitWindow(1280, 720, "Johnny Appleseed — capture");
+        Raylib.SetTargetFPS(60);
+        InputSystem.Initialize();
+
+        IScene s = scene switch
+        {
+            "menu"  => new MainMenuScene(),
+            _        => new IntroScene(),
+        };
+        s.Load();
+
+        const float dt = 1f / 60f;
+        int frames = (int)MathF.Max(1, seconds * 60f);
+        for (int i = 0; i < frames && !Raylib.WindowShouldClose(); i++)
+        {
+            InputSystem.Update();
+            s.Update(dt);
+            Raylib.BeginDrawing();
+            s.Draw();
+            Raylib.EndDrawing();
+        }
+
+        Raylib.TakeScreenshot(outPath);   // written relative to CWD
+        s.Unload();
+        Raylib.CloseWindow();
+
+        Console.WriteLine($"[capture] wrote {outPath} after {frames} frames of '{scene}'");
+        return 0;
+    }
+}

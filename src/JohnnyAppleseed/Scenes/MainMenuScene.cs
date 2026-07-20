@@ -2,6 +2,7 @@ using Raylib_cs;
 using System.Numerics;
 using JohnnyAppleseed.Input;
 using JohnnyAppleseed.Rendering;
+using JohnnyAppleseed.Save;
 
 namespace JohnnyAppleseed.Scenes;
 
@@ -11,6 +12,9 @@ sealed class MainMenuScene : IScene
 
     private int  _selectedIndex;
     private bool _isFullscreen;
+
+    // Snapshot of the save taken on entry, used to label PLAY and to resume.
+    private SaveData? _save;
 
     // ── layout constants ──────────────────────────────────────────────────────
     private const int TitleFontSize  = 60;
@@ -36,6 +40,7 @@ sealed class MainMenuScene : IScene
         _bg = new ParallaxBackground();
         _bg.Load();
         _isFullscreen = Raylib.IsWindowFullscreen();
+        _save = SaveSystem.Load();   // may be null on a fresh install
     }
 
     public IScene? Update(float dt)
@@ -95,11 +100,21 @@ sealed class MainMenuScene : IScene
 
     private IScene? Activate(int index) => index switch
     {
-        IdxPlay       => null,   // future: return new GameplayScene()
+        IdxPlay       => StartOrResume(),
         IdxFullscreen => ToggleFullscreen(),
         IdxExit       => ExitScene.Instance,
         _             => null,
     };
+
+    // Resume the intro at the saved page when a save exists and the intro is not
+    // yet finished; otherwise begin from the first page.
+    private IScene StartOrResume()
+    {
+        int startPage = (_save != null && !_save.Story.IntroComplete)
+            ? _save.Story.IntroStep
+            : 0;
+        return new IntroScene(startPage);
+    }
 
     private IScene? ToggleFullscreen()
     {
@@ -109,6 +124,10 @@ sealed class MainMenuScene : IScene
 
     private string LabelFor(int i) => i switch
     {
+        // Reflect saved progress: mid-intro saves resume via "CONTINUE".
+        IdxPlay       => (_save != null && !_save.Story.IntroComplete && _save.Story.IntroStep > 0)
+                             ? "CONTINUE"
+                             : "PLAY",
         IdxFullscreen => _isFullscreen ? "WINDOWED" : "FULLSCREEN",
         _             => _baseLabels[i],
     };

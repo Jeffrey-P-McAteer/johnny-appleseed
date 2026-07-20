@@ -38,9 +38,85 @@ Mouse clicks are handled directly in scenes — they need spatial context (the c
 
 The **ShortcutLeft / ShortcutRight** actions (LB/RB bumpers, Q/E on keyboard) are reserved for single-key navigation to any menu that would otherwise require multiple arrow + Enter presses.  Wire them into new scenes as those menus are built.
 
+#### Gamepad hot-plugging
+
+Controllers can be connected or disconnected at any time — including after the
+game has started — and are picked up automatically.  Rather than assume a fixed
+slot, `InputSystem.Update()` resolves an *active gamepad* each frame by scanning
+all slots: it keeps the current pad while it stays connected, re-scans when that
+pad is unplugged, and adopts the first available pad otherwise.  This is why a
+controller that enumerates on a non-zero slot (or is plugged in mid-game) works
+identically to one present at launch — there is no hardcoded slot 0.  Connect and
+disconnect events are logged to stderr.
+
+If a controller is *detected but its buttons do nothing* (a common Linux case
+where GLFW's built-in SDL mapping table predates the controller), drop an
+up-to-date [`gamecontrollerdb.txt`](https://github.com/mdqinc/SDL_GameControllerDB)
+next to the executable or in the app-data folder — `InputSystem.Initialize()`
+loads it via `SetGamepadMappings()` at startup.  Missing file is not an error;
+GLFW's built-in mappings already cover most mainstream controllers.
+
+The hot-plug selection policy (`InputSystem.ResolveActiveGamepad`) is pure and
+unit-tested headlessly:
+
+```bash
+dotnet run --project src/JohnnyAppleseed/JohnnyAppleseed.csproj -- --selftest-input
+dotnet run --project src/JohnnyAppleseed/JohnnyAppleseed.csproj -- --selftest        # all suites
+```
+
 ### Parallax background (`Rendering/`)
 
 Four procedurally-generated texture layers (sky gradient, star noise, mountain silhouettes, tree-line) scroll and rotate at different speeds via a custom GLSL fragment shader.  No external image assets are needed.  Each layer is a `ParallaxLayer` data object; add more or swap textures to change the look without touching the shader.
+
+### Intro story (`Scenes/IntroScene.cs`, `Story/`, `UI/`)
+
+A clickable introduction to the early 1800s. Narration is revealed with a
+typewriter effect (`UI/Typewriter.cs`) — characters appear one at a time with
+longer pauses after sentence and clause punctuation — inside a dialogue box that
+word-wraps the text (`UI/TextWrap.cs`). Every input device advances the story:
+
+| Action | Keyboard | Mouse | Gamepad |
+|---|---|---|---|
+| Continue / finish line | Enter, Space, → | Left-click anywhere | A, →, RB |
+| Back a page | ← | — | LB |
+| Leave to menu | Esc | — | B |
+
+The first continue press completes the current line instantly; the second turns
+the page. The script itself is **placeholder template copy** in
+`Story/IntroScript.cs` — a writer replaces the `Heading`/`Body` strings without
+touching game code (add/remove/reorder `StoryPage` entries freely).
+
+The intro **saves progress on every page turn**, so quitting mid-story and
+returning resumes on the exact page left off (the main menu shows `CONTINUE`).
+
+### Save system (`Save/`)
+
+A single auto-save slot is stored as human-readable JSON in the app-data folder
+(`savegame.json`). It is designed to grow without breaking old saves:
+
+- **Versioned** — `formatVersion` drives `SaveSystem.Migrate()`; bump it only for
+  changes that adding/removing optional fields can't express.
+- **Forward-compatible** — unknown fields written by a newer build are preserved
+  via `[JsonExtensionData]`, and a newer `formatVersion` is never downgraded.
+- **Backward-compatible** — missing fields deserialize to defaults.
+- **Safe writes** — atomic temp-file swap; a corrupt file is quarantined to
+  `.bak` rather than crashing.
+
+Serialization uses a `System.Text.Json` source-generated context
+(`Save/SaveJsonContext.cs`) so it works under single-file/self-contained publish.
+
+Verify the save/resume behaviour headlessly (no window):
+
+```bash
+dotnet run --project src/JohnnyAppleseed/JohnnyAppleseed.csproj -- --selftest-save
+```
+
+Capture a screenshot of a scene for visual checks:
+
+```bash
+dotnet run --project src/JohnnyAppleseed/JohnnyAppleseed.csproj -- --capture-intro 3 shot.png
+dotnet run --project src/JohnnyAppleseed/JohnnyAppleseed.csproj -- --capture-menu 1 menu.png
+```
 
 ### App data path (`AppData.cs`)
 
