@@ -10,6 +10,18 @@
     <RootNamespace>JohnnyAppleseed</RootNamespace>
     <!-- Suppress single-file IL stripping warnings from Raylib internals -->
     <SuppressTrimAnalysisWarnings>true</SuppressTrimAnalysisWarnings>
+    <!--
+      Do NOT mark the x64 apphost as CET (Control-flow Enforcement Technology)
+      compatible. .NET enables this by default on x64, which turns on hardware
+      shadow stacks for the process. CoreCLR then requires the OS to provide
+      Special User-Mode APCs (QueueUserAPC2); when a CPU/VM exposes CET shadow
+      stacks but that APC capability is missing — common in VMs and some older
+      Windows builds — the runtime hits an incompatible state and dies with
+      "!AreShadowStacksEnabled() || UseSpecialUserModeApc()" (threads.cpp) /
+      fails to launch. Opting out avoids that path. x64-Windows-only knob; a
+      no-op on Linux/macOS/arm64. See dotnet/runtime#110000.
+    -->
+    <CETCompat>false</CETCompat>
   </PropertyGroup>
 
   <!--

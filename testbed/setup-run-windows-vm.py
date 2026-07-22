@@ -362,7 +362,7 @@ time.sleep(0.5) # idk cache nonsense after create_windows_drive
 pretty_cmd(
   qemu_system_exe,
     '-enable-kvm',
-    '-m',       str(int(1024 * 16)), # 16gb ram - MA3 wants at least 8gb
+    '-m',       str(int(1024 * 16)), # 16gb ram
     '-smp',     '4',
     '-cpu',     'host',
     '-machine', 'q35',
@@ -376,6 +376,10 @@ pretty_cmd(
     '-vga',     'none',
     '-device',  'qxl-vga',
     '-display', 'gtk,gl=on,show-menubar=off',
+
+    # Requires the qemu-xhci device above, list ALL game controller vendor and device IDs we use here
+    '-device', 'usb-host,vendorid=0x045e,productid=0x028e',
+
 cwd=vm_data_folder)
 
 
