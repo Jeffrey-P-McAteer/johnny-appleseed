@@ -19,6 +19,7 @@ static class Capture
         Raylib.SetConfigFlags(ConfigFlags.ResizableWindow);
         Raylib.InitWindow(1280, 720, "Johnny Appleseed — capture");
         Raylib.SetTargetFPS(60);
+        Raylib.InitAudioDevice();   // scenes may load sounds on entry (e.g. menu SFX)
         InputSystem.Initialize();
 
         IScene s = scene switch
@@ -41,6 +42,8 @@ static class Capture
 
         Raylib.TakeScreenshot(outPath);   // written relative to CWD
         s.Unload();
+        Assets.UnloadAll();
+        Raylib.CloseAudioDevice();
         Raylib.CloseWindow();
 
         Console.WriteLine($"[capture] wrote {outPath} after {frames} frames of '{scene}'");

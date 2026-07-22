@@ -33,6 +33,9 @@ static class Game
 
         TrySetWindowIcon();
 
+        // Audio device for sound effects / music (embedded assets loaded on demand).
+        Raylib.InitAudioDevice();
+
         // Load gamepad mappings now that GLFW is up; controllers are resolved
         // dynamically each frame in InputSystem.Update (hot-plug aware).
         InputSystem.Initialize();
@@ -68,7 +71,8 @@ static class Game
         }
 
         scene.Unload();
-        Assets.UnloadAll();
+        Assets.UnloadAll();            // while GL context + audio device still live
+        Raylib.CloseAudioDevice();
         Raylib.CloseWindow();
     }
 

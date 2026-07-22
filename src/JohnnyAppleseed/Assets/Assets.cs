@@ -21,6 +21,7 @@ static class Assets
 {
     private static readonly Assembly Asm = typeof(Assets).Assembly;
     private static readonly Dictionary<string, Texture2D> _textures = new();
+    private static readonly Dictionary<string, Sound> _sounds = new();
 
     /// <summary>True if an embedded resource with this logical key exists.</summary>
     public static bool Exists(string key) => Asm.GetManifestResourceInfo(key) is not null;
@@ -62,11 +63,37 @@ static class Assets
         return tex;
     }
 
-    /// <summary>Release every cached texture. Call before <c>CloseWindow</c>.</summary>
+    /// <summary>
+    /// A playable sound for an embedded audio file, decoded on first use and
+    /// cached. Requires the audio device to be initialised (Game.Run does this).
+    /// The extension in <paramref name="key"/> tells Raylib the format (".mp3", …).
+    /// Do not unload the returned sound directly; call <see cref="UnloadAll"/>.
+    /// </summary>
+    public static Sound Sound(string key)
+    {
+        if (_sounds.TryGetValue(key, out Sound cached))
+            return cached;
+
+        Wave wave = Raylib.LoadWaveFromMemory(Path.GetExtension(key), Bytes(key));
+        Sound sound = Raylib.LoadSoundFromWave(wave);
+        Raylib.UnloadWave(wave);
+        _sounds[key] = sound;
+        return sound;
+    }
+
+    /// <summary>
+    /// Release every cached asset. Call after the scene unloads but while the
+    /// window and audio device are still open (textures need the GL context,
+    /// sounds need the audio device).
+    /// </summary>
     public static void UnloadAll()
     {
         foreach (Texture2D tex in _textures.Values)
             Raylib.UnloadTexture(tex);
         _textures.Clear();
+
+        foreach (Sound snd in _sounds.Values)
+            Raylib.UnloadSound(snd);
+        _sounds.Clear();
     }
 }

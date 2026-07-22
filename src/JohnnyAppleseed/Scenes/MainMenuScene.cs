@@ -8,6 +8,9 @@ namespace JohnnyAppleseed.Scenes;
 
 sealed class MainMenuScene : IScene
 {
+    // Played when the highlighted item changes (keyboard, gamepad, or mouse hover).
+    private const string FocusSoundKey = "audio/stone_rock_or_wood_moved_no_tick.mp3";
+
     private ParallaxBackground _bg = null!;
 
     private int  _selectedIndex;
@@ -41,6 +44,7 @@ sealed class MainMenuScene : IScene
         _bg.Load();
         _isFullscreen = Raylib.IsWindowFullscreen();
         _save = SaveSystem.Load();   // may be null on a fresh install
+        Assets.Sound(FocusSoundKey); // pre-decode so the first move isn't silent
     }
 
     public IScene? Update(float dt)
@@ -49,6 +53,7 @@ sealed class MainMenuScene : IScene
         _isFullscreen = Raylib.IsWindowFullscreen();
 
         int count = _baseLabels.Length;
+        int previousIndex = _selectedIndex;   // detect focus change → play a click
 
         // ── navigation ────────────────────────────────────────────────────────
         // Up / Down / Left stick / D-pad
@@ -80,6 +85,10 @@ sealed class MainMenuScene : IScene
         // Cancel / B → highlight Exit without quitting (common UX convention)
         if (InputSystem.IsPressed(InputAction.Cancel))
             _selectedIndex = IdxExit;
+
+        // Audible feedback whenever the highlighted item actually changed.
+        if (_selectedIndex != previousIndex)
+            Raylib.PlaySound(Assets.Sound(FocusSoundKey));
 
         return null;
     }
