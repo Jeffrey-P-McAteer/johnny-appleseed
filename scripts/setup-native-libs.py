@@ -98,6 +98,12 @@ ZIG_ARCHIVES = {
 #   display     Passed to -Dlinux_display_backend=  (Linux only).
 #   out_name    fnmatch glob for the library name in zig-out/lib/ or zig-out/bin/.
 #   sentinel    Optional marker file written alongside dest.
+#   config      Extra compile-time -D macros joined into raylib's build.zig
+#               `-Dconfig=` option. raylib's src/config.h guards every flag with
+#               `#ifndef`, so a -D here overrides the default. We use this to turn
+#               ON the image loaders raylib disables by default (JPG/BMP/TGA/PSD),
+#               so original art (e.g. embedded .jpg) decodes in our from-source
+#               builds — the stock download builds already ship these enabled.
 
 DOWNLOAD_TARGETS: dict[str, dict] = {
     "linux-x64": {
@@ -153,6 +159,16 @@ BUILD_TARGETS: dict[str, dict] = {
         "dest":        RUNTIMES / "linux-x64"  / "native" / "libraylib.so",
         "sentinel":    RUNTIMES / "linux-x64"  / "native" / ".wayland-enabled",
         "elf_machine": 0x3E,
+        # Enable raylib's off-by-default image loaders so embedded original art
+        # (JPEG photos, BMP/TGA/PSD exports) decodes. Without these, raylib's
+        # config.h leaves them at 0 and LoadImageFromMemory(".jpg", …) returns
+        # "Data format not supported". (PNG/GIF/QOI are already on by default.)
+        "config": [
+            "-DSUPPORT_FILEFORMAT_JPG=1",
+            "-DSUPPORT_FILEFORMAT_BMP=1",
+            "-DSUPPORT_FILEFORMAT_TGA=1",
+            "-DSUPPORT_FILEFORMAT_PSD=1",
+        ],
     },
 }
 
@@ -458,6 +474,10 @@ def provision_zig_build(zig: Path, raylib: Path, cfg: dict) -> None:
         cmd += [f"-Dtarget={cfg['zig_target']}"]
     if "display" in cfg:
         cmd += [f"-Dlinux_display_backend={cfg['display']}"]
+    # Extra config macros (e.g. enabling optional image formats). build.zig's
+    # -Dconfig takes a single space-separated string of raw compiler flags.
+    if cfg.get("config"):
+        cmd += [f"-Dconfig={' '.join(cfg['config'])}"]
 
     env = os.environ.copy()
     env["PATH"] = "/usr/sbin:/usr/local/sbin:/usr/local/bin:/usr/bin:/bin:" + env.get("PATH", "")
@@ -465,6 +485,8 @@ def provision_zig_build(zig: Path, raylib: Path, cfg: dict) -> None:
 
     target_label = cfg.get("zig_target") or "native"
     extra = f" -Dlinux_display_backend={cfg['display']}" if "display" in cfg else ""
+    if cfg.get("config"):
+        extra += f" -Dconfig='{' '.join(cfg['config'])}'"
     print(f"  zig build -Dtarget={target_label} -Dshared=true{extra}")
     print("  (streaming output — first run may take a minute)\n")
 

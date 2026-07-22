@@ -1,7 +1,6 @@
 using Raylib_cs;
 using System.Numerics;
 using JohnnyAppleseed.Input;
-using JohnnyAppleseed.Rendering;
 using JohnnyAppleseed.Save;
 
 namespace JohnnyAppleseed.Scenes;
@@ -11,7 +10,9 @@ sealed class MainMenuScene : IScene
     // Played when the highlighted item changes (keyboard, gamepad, or mouse hover).
     private const string FocusSoundKey = "audio/stone_rock_or_wood_moved_no_tick.mp3";
 
-    private ParallaxBackground _bg = null!;
+    // Still-life painting shown behind the menu (embedded; owned by Assets cache).
+    private const string BackgroundKey = "graphics/Still_Life_Apples_and_Chestnuts_by_John_F_Francis.jpg";
+    private Texture2D _bg;
 
     private int  _selectedIndex;
     private bool _isFullscreen;
@@ -40,8 +41,8 @@ sealed class MainMenuScene : IScene
 
     public void Load()
     {
-        _bg = new ParallaxBackground();
-        _bg.Load();
+        _bg = Assets.Texture(BackgroundKey);
+        Raylib.SetTextureFilter(_bg, TextureFilter.Bilinear); // smooth when scaled
         _isFullscreen = Raylib.IsWindowFullscreen();
         _save = SaveSystem.Load();   // may be null on a fresh install
         Assets.Sound(FocusSoundKey); // pre-decode so the first move isn't silent
@@ -49,7 +50,6 @@ sealed class MainMenuScene : IScene
 
     public IScene? Update(float dt)
     {
-        _bg.Update(dt);
         _isFullscreen = Raylib.IsWindowFullscreen();
 
         int count = _baseLabels.Length;
@@ -96,16 +96,38 @@ sealed class MainMenuScene : IScene
     public void Draw()
     {
         Raylib.ClearBackground(new Color(3, 3, 12, 255));
-        _bg.Draw();
+        DrawBackground();
         DrawMenu();
     }
 
     public void Unload()
     {
-        _bg.Dispose();
+        // The background texture is owned/cached by Assets (released on shutdown),
+        // so there is nothing scene-specific to free here.
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
+
+    // Draw the still-life to fully cover the window (scale-to-fill, centre-cropped),
+    // then a soft dark wash so the title and menu text stay legible over the busy
+    // painting.
+    private void DrawBackground()
+    {
+        int sw = Raylib.GetScreenWidth();
+        int sh = Raylib.GetScreenHeight();
+
+        float scale = MathF.Max((float)sw / _bg.Width, (float)sh / _bg.Height);
+        float dw = _bg.Width * scale;
+        float dh = _bg.Height * scale;
+
+        Raylib.DrawTexturePro(
+            _bg,
+            new Rectangle(0, 0, _bg.Width, _bg.Height),
+            new Rectangle((sw - dw) / 2f, (sh - dh) / 2f, dw, dh),
+            Vector2.Zero, 0f, Color.White);
+
+        Raylib.DrawRectangle(0, 0, sw, sh, new Color(3, 3, 12, 110));
+    }
 
     private IScene? Activate(int index) => index switch
     {
