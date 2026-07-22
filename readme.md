@@ -1,181 +1,226 @@
 # Johnny Appleseed
 
-A 2D cross-platform game written in C# using [Raylib-cs](https://github.com/raylib-cs/raylib-cs) (Raylib 6.0).  The current build presents a main menu with a rotating parallax background.  Future development will expand on the scene system laid out here.
+A 2D, cross-platform narrative game built in C# on [Raylib-cs](https://github.com/raylib-cs/raylib-cs) (Raylib 6.0).
 
 Download Here [![Releases Download Page](https://img.shields.io/github/v/release/Jeffrey-P-McAteer/johnny-appleseed)](https://github.com/Jeffrey-P-McAteer/johnny-appleseed/releases)
 
 [Landing Page](https://jeffrey-p-mcateer.github.io/johnny-appleseed)
 
+---
+
+## The game
+
+Johnny Appleseed is a story-driven 2D game set in the American frontier of the
+early 1800s. You step into the period through a clickable, typewriter-narrated
+introduction and go on from there.
+
+The project is early. What exists today and plays end-to-end:
+
+- A **main menu** rendered over a period still-life painting, with keyboard,
+  mouse, and gamepad navigation and focus sound effects.
+- A **clickable intro story** that reveals narration one character at a time and
+  turns pages on any input device.
+- A **save system** that auto-saves your place in the intro, so `PLAY` becomes
+  `CONTINUE` and drops you back exactly where you left off.
+
+There is no free-roaming gameplay scene yet — the intro currently returns you to
+the menu when it finishes. The rest of this document explains how the pieces fit
+together and where to add the next ones. It assumes you know C# but have never
+seen this codebase.
+
+### Design principles worth knowing up front
+
+- **Everything ships in one file.** The game is published as a single
+  self-contained executable per platform. All art and audio are embedded
+  *inside* that binary as resources — there is no loose `assets/` folder next to
+  the game at runtime. This shapes where you put new asset files (see
+  [Adding assets](#adding-assets)).
+- **The game project is pure game logic.** All debug, measurement, and
+  data-capture tooling lives in a *separate* project
+  (`src/JohnnyAppleseed.Probe`), not in the game. The shipped binary has no debug
+  flags or test modes.
+- **Cross-platform from a Linux host.** You can build and package Windows, macOS,
+  and Linux artifacts from a single Linux machine, using bundled toolchains (Zig,
+  pure-Python image/DMG writers) rather than system installs.
+
+---
+
+## Building on Linux
+
+### Requirements
+
+- **.NET 9 SDK** — `dotnet --version` should report 9.x
+- **[uv](https://docs.astral.sh/uv/)** — `uv --version`; runs the Python build
+  scripts, which declare their own inline dependencies (nothing to `pip install`)
+- **X11 development headers** — only needed for the `linux-arm64` cross-compile
+  and the native-Wayland build; not required to run or package for `linux-x64`
+
+### Run it
+
+```bash
+dotnet run --project src/JohnnyAppleseed/JohnnyAppleseed.csproj
+```
+
+A plain `dotnet build`/`dotnet run` (no runtime identifier) produces a
+framework-dependent build — quick to iterate on, and referenceable by the probe
+project. Passing a runtime identifier (as the packaging script does) switches on
+single-file, self-contained publishing.
+
+### Package for distribution
+
+```bash
+uv run scripts/package.py                  # every platform
+uv run scripts/package.py linux-x64        # one target
+uv run scripts/package.py --skip-download  # skip the arm64 native-lib download
+```
+
+### Where the built artifacts live
+
+`dotnet build` output lands under `src/JohnnyAppleseed/bin/<Config>/net9.0/`.
+
+`package.py` writes finished, shippable artifacts to `dist/<target>/`:
+
+| Target | Artifact |
+|---|---|
+| `linux-x64` | `dist/linux-x64/linux-x64` — raw self-contained executable |
+| `linux-arm64` | `dist/linux-arm64/linux-arm64` |
+| `windows-x64` | `dist/windows-x64/windows-x64.zip` (contains the `.exe`) |
+| `windows-arm64` | `dist/windows-arm64/windows-arm64.zip` |
+| `macos-x64` | `dist/macos-x64/macos-x64.dmg` (`.app` bundle in an HFS+ image) |
+| `macos-arm64` | `dist/macos-arm64/macos-arm64.dmg` |
+
+Generated intermediates (the build-info stamp, rasterized icons) go to `obj/`,
+which is gitignored — the build never creates new tracked folders for generated
+files.
+
+### About the two arm64 targets and Wayland
+
+The managed C# cross-compiles to every platform cleanly. The catch is the
+**native Raylib shared library**: Raylib-cs's NuGet package bundles pre-built
+natives only for `win-x64`, `linux-x64`, `osx-x64`, and `osx-arm64`.
+
+`scripts/setup-native-libs.py` fills the gaps without installing anything
+system-wide — it downloads Zig and Raylib source into `./build/` and produces the
+missing libraries:
+
+```bash
+uv run scripts/setup-native-libs.py linux-arm64   # libraylib.so for arm64
+uv run scripts/setup-native-libs.py win-arm64      # raylib.dll for arm64
+uv run scripts/setup-native-libs.py linux-wayland  # native-Wayland libraylib.so
+```
+
+When a native lib exists under `runtimes/<RID>/native/`, the `.csproj`
+conditionally overrides the NuGet default for that platform; a clean checkout
+with an empty `runtimes/` simply uses the NuGet libraries. After running the
+setup script, re-run `package.py` to pick the new libs up.
+
+The stock `linux-x64` native is **X11-only**, so on a Wayland session the game
+runs through XWayland by default (safe everywhere). For native Wayland (better
+HiDPI and latency), build with `setup-native-libs.py linux-wayland`, then
+package. `Platform/LinuxDisplay.cs` detects the session and steers GLFW's backend
+choice at startup, guided by a compile-time flag set when the Wayland lib is
+present.
 
 ---
 
 ## Architecture
 
-### Scene system
+The whole game is a loop over **scenes**. `Game.cs` owns the window, the audio
+device, the per-frame input pass, and a single "current scene." Each scene is
+responsible for its own logic and rendering and tells the loop what comes next.
 
-All game states (menus, gameplay, cutscenes, etc.) implement `IScene`:
+```
+Program.cs   →  Game.Run()
+                 ├─ InitWindow / InitAudioDevice / InputSystem.Initialize
+                 └─ loop:  InputSystem.Update()
+                           next = scene.Update(dt)   ── returns a scene, or null
+                           scene.Draw()
+                           (swap to `next` when non-null; ExitScene quits)
+```
+
+### Scenes (`Scenes/`)
+
+Every game state — menu, cutscene, future gameplay — implements `IScene`:
 
 ```
 IScene
-├── Load()           called once when entering the scene
-├── Update(dt) → IScene?   game logic; return next scene or null to stay
-├── Draw()           render
-└── Unload()         release scene-owned resources
+├── Load()                    entering the scene: acquire resources
+├── Update(dt) → IScene?      logic; return the next scene, or null to stay
+├── Draw()                    render this frame
+└── Unload()                  leaving the scene: release resources
 ```
 
-`Game.cs` drives the loop.  Returning `ExitScene.Instance` from `Update` quits cleanly.  Adding a new game state means creating a new `IScene` class and returning it from whichever scene triggers the transition.
+Returning `ExitScene.Instance` from `Update` quits the game cleanly. Present
+scenes: `MainMenuScene`, `IntroScene`.
 
-### Input system (`Input/`)
+### Input (`Input/`)
 
-A single abstraction layer sits between hardware and game logic:
+`InputSystem.Update()` runs once per frame *before* any scene logic and unifies
+keyboard, mouse, and gamepad into logical `InputAction`s:
 
 | Logical action | Keyboard | Gamepad |
 |---|---|---|
-| Up / Down / Left / Right | Arrow keys, WASD | D-pad, Left stick |
+| Up / Down / Left / Right | Arrows, WASD | D-pad, left stick |
 | Confirm | Enter, Space | A / South |
 | Cancel | Escape | B / East |
-| ShortcutLeft | Q, PageUp | **LB / L1** |
-| ShortcutRight | E, PageDown | **RB / R1** |
+| ShortcutLeft | Q, PageUp | LB / L1 |
+| ShortcutRight | E, PageDown | RB / R1 |
 
-Mouse clicks are handled directly in scenes — they need spatial context (the click position) that the input system cannot provide.
+Analog-stick directions fire once per threshold crossing (no runaway repeat).
+Mouse clicks are read directly in scenes, since they need the click position.
 
-`InputSystem.Update()` is called once per frame before any scene logic.  Analog-stick directions fire exactly once per threshold crossing, preventing rapid-repeat navigation.
+**Dynamic gamepad tracking:** controllers can connect or disconnect at any time.
+Because operating systems routinely expose non-controllers as "gamepads"
+(touchpads, lid sensors, virtual/`uinput` devices) on low slots, the system does
+not trust slot order. It watches all four slots and counts real input *events*
+per slot over a rolling 30-second window; the active pad is the one you're
+actually using (most recent events), falling back to the least-virtual slot by
+name/axis-count heuristics, then to the current pad for stability. An idle
+touchpad never steals focus. The selection policy is a pure function, unit-tested
+headlessly in the probe.
 
-The **ShortcutLeft / ShortcutRight** actions (LB/RB bumpers, Q/E on keyboard) are reserved for single-key navigation to any menu that would otherwise require multiple arrow + Enter presses.  Wire them into new scenes as those menus are built.
-
-#### Dynamic gamepad tracking
-
-Controllers can be connected or disconnected at any time — including mid-game —
-and are picked up automatically. The catch: operating systems routinely report
-**non-controllers as "gamepads"** (laptop touchpads, lid sensors, virtual/`uinput`
-devices), and they can sit on low slots and never disconnect. Trusting slot order
-means a phantom device silently hijacks input.
-
-So `InputSystem.Update()` tracks **all four slots at once**. Each frame it counts
-real input *events* per slot — button-press edges and stick/trigger dead-zone
-crossings — over a rolling **30-second** window. For the many APIs that need a
-single controller, the *active* pad is chosen as:
-
-1. the slot with the **most events in the last 30 s** (the pad you're actually
-   using), else
-2. on a tie or when nobody has produced events, the **least-virtual** slot — the
-   one most likely to be a real gamepad, judged by name and axis-count *heuristics*
-   (best-effort guesses, explicitly labelled as such; Raylib exposes no vendor ID),
-   else
-3. the current pad (stability), else the lowest slot.
-
-The result: an idle touchpad never steals focus, and the instant you press a
-button on a real controller it becomes active — on any slot, at any time. Active
-changes are logged to stderr, and per-slot event counts are visible live in the
-[hardware probe](#hardware-probe-srcjohnnyappleseedprobe).
-
-If a controller is *detected but its buttons do nothing* (a Linux case where
-GLFW's built-in SDL mapping table predates the controller), drop an up-to-date
+If a controller is detected but its buttons do nothing, drop an up-to-date
 [`gamecontrollerdb.txt`](https://github.com/mdqinc/SDL_GameControllerDB) next to
-the executable or in the app-data folder — `InputSystem.Initialize()` loads it via
-`SetGamepadMappings()` at startup. Missing file is not an error; GLFW's built-in
-mappings already cover most mainstream controllers.
+the executable or in the app-data folder; `InputSystem.Initialize()` loads it via
+`SetGamepadMappings()`.
 
-The selection policy (`InputSystem.SelectActiveGamepad`) is pure and unit-tested
-headlessly. The self-tests live in the [hardware probe](#hardware-probe-srcjohnnyappleseedprobe),
-so the game binary stays just game logic:
+### Rendering (`Rendering/`)
 
-```bash
-uv run scripts/probe.py selftest input
-uv run scripts/probe.py selftest         # both suites (save + input)
-```
+`ParallaxBackground.cs` is a self-contained, multi-layer scrolling/rotating
+background driven by a custom GLSL fragment shader (used by `IntroScene`). Each
+layer is a small `ParallaxLayer` data object with scroll/rotate/scale/tint
+fields; add or swap layers to restyle without touching the shader. New rendering
+primitives belong here.
 
-### Parallax background (`Rendering/`)
+### Story, UI, and the intro (`Story/`, `UI/`, `Scenes/IntroScene.cs`)
 
-Four procedurally-generated texture layers (sky gradient, star noise, mountain silhouettes, tree-line) scroll and rotate at different speeds via a custom GLSL fragment shader.  No external image assets are needed.  Each layer is a `ParallaxLayer` data object; add more or swap textures to change the look without touching the shader.
-
-### Intro story (`Scenes/IntroScene.cs`, `Story/`, `UI/`)
-
-A clickable introduction to the early 1800s. Narration is revealed with a
-typewriter effect (`UI/Typewriter.cs`) — characters appear one at a time with
-longer pauses after sentence and clause punctuation — inside a dialogue box that
-word-wraps the text (`UI/TextWrap.cs`). Every input device advances the story:
-
-| Action | Keyboard | Mouse | Gamepad |
-|---|---|---|---|
-| Continue / finish line | Enter, Space, → | Left-click anywhere | A, →, RB |
-| Back a page | ← | — | LB |
-| Leave to menu | Esc | — | B |
-
-The first continue press completes the current line instantly; the second turns
-the page. The script itself is **placeholder template copy** in
-`Story/IntroScript.cs` — a writer replaces the `Heading`/`Body` strings without
-touching game code (add/remove/reorder `StoryPage` entries freely).
-
-The intro **saves progress on every page turn**, so quitting mid-story and
-returning resumes on the exact page left off (the main menu shows `CONTINUE`).
+- `Story/IntroScript.cs` holds the narration as `StoryPage(Heading, Body)`
+  records. It is **placeholder template copy** — a writer edits the strings and
+  adds/removes/reorders pages without touching game code.
+- `UI/Typewriter.cs` reveals text one character at a time with longer pauses
+  after sentence and clause punctuation.
+- `UI/TextWrap.cs` word-wraps to a pixel width (resize-safe).
+- `IntroScene` composes these into a dialogue box; any input device advances,
+  and it **saves on every page turn**.
 
 ### Save system (`Save/`)
 
-A single auto-save slot is stored as human-readable JSON in the app-data folder
-(`savegame.json`). It is designed to grow without breaking old saves:
+A single auto-save slot, stored as human-readable JSON (`savegame.json`) in the
+app-data folder. It is built to evolve without breaking old saves:
 
-- **Versioned** — `formatVersion` drives `SaveSystem.Migrate()`; bump it only for
-  changes that adding/removing optional fields can't express.
-- **Forward-compatible** — unknown fields written by a newer build are preserved
-  via `[JsonExtensionData]`, and a newer `formatVersion` is never downgraded.
+- **Versioned** — `formatVersion` drives `SaveSystem.Migrate()`.
+- **Forward-compatible** — unknown fields from newer builds are preserved via
+  `[JsonExtensionData]`; a newer `formatVersion` is never downgraded.
 - **Backward-compatible** — missing fields deserialize to defaults.
 - **Safe writes** — atomic temp-file swap; a corrupt file is quarantined to
   `.bak` rather than crashing.
 
 Serialization uses a `System.Text.Json` source-generated context
-(`Save/SaveJsonContext.cs`) so it works under single-file/self-contained publish.
-
-Verify the save/resume behaviour headlessly (no window) via the probe:
-
-```bash
-uv run scripts/probe.py selftest save
-```
-
-Capture a screenshot of a scene for visual checks (also via the probe):
-
-```bash
-uv run scripts/probe.py capture intro 3 shot.png
-uv run scripts/probe.py capture menu 1 menu.png
-```
-
-### Hardware probe (`src/JohnnyAppleseed.Probe`)
-
-A separate **debug-only** binary for measuring what real controllers actually do.
-It references the game project and reuses its input layer (`InputSystem`, app-data
-paths, build stamp) but swaps in measurement logic instead of the game loop, so
-what it reports is exactly what the game sees. It is intentionally *not* part of
-the cross-platform packaging pipeline — it is a plain local exe you build on the
-machine under test.
-
-Run it via the uv-style wrapper:
-
-```bash
-uv run scripts/probe.py                     # interactive: live gamepad state + edge log
-uv run scripts/probe.py list                # enumerate gamepads (raylib) + input devices (Linux)
-uv run scripts/probe.py raw                 # raw kernel events from /dev/input/js0
-uv run scripts/probe.py raw /dev/input/js1
-uv run scripts/probe.py assets              # list assets embedded in the game binary
-uv run scripts/probe.py capture menu 1 out.png   # headless screenshot of a scene
-uv run scripts/probe.py selftest            # headless save + input self-tests
-uv run scripts/probe.py -c Release          # choose build config (default: Debug)
-```
-
-- **interactive** opens a window and logs every button/axis edge to the console
-  with its Raylib code (the same number the game maps against), while showing the
-  active gamepad and the resolved logical actions live — a direct proof that
-  hot-plug and button mapping work on your hardware.
-- **list** correlates the kernel's device view with what Raylib enumerates.
-- **raw** reads the Linux joystick device directly, bypassing Raylib, to show the
-  ground-truth kernel button/axis numbers (needs read access to `/dev/input/jsN`;
-  add yourself to the `input` group if you hit a permission error).
-
-The game exposes its internals to the probe via `<InternalsVisibleTo>`; this is
-tooling-only and does not affect the shipped build.
+(`Save/SaveJsonContext.cs`) so it works under single-file publish.
 
 ### App data path (`AppData.cs`)
 
-On first run the game creates a platform-appropriate folder for save data and preferences:
+Created on first run:
 
 | Platform | Path |
 |---|---|
@@ -185,132 +230,105 @@ On first run the game creates a platform-appropriate folder for save data and pr
 
 ---
 
-## Building
+## Where new things go
 
-### Requirements
+### Adding a scene
 
-- .NET 9 SDK — `dotnet --version`
-- uv — `uv --version`
-- X11 dev headers (Linux, for the arm64 cross-compile script only)
+Create a class in `src/JohnnyAppleseed/Scenes/` implementing `IScene`, then return
+an instance of it from another scene's `Update` to transition in. That is the
+whole contract — the loop handles `Load`/`Draw`/`Unload` timing for you.
 
-### Run locally
+### Adding a level
 
-```bash
-dotnet run --project src/JohnnyAppleseed/JohnnyAppleseed.csproj
+There is no level system yet; the game currently flows menu → intro → menu. When
+gameplay arrives, follow the established grain:
+
+- A level is best modeled as **its own `IScene`** (e.g. a future
+  `Scenes/OverworldScene.cs`) that loads level *data* and renders/updates it.
+- Keep the **data** (tilemaps, spawn points, dialogue triggers) out of code as
+  embedded asset files (see below), and load them through `Assets`. That keeps
+  levels editable without recompiling and consistent with how art/audio already
+  work. The save system already carries a `checkpoint` string in `story` for
+  recording which level/checkpoint the player reached.
+
+### Adding assets
+
+All art and audio live at the **repo root**, not under `src/`:
+
+- **`graphics/`** — images (the still-life `.jpg`, `icon.svg`, etc.)
+- **`audio/`** — sounds and music (`.mp3`, `.wav`, ...)
+
+The `.csproj` embeds *everything* under these two trees into the binary as
+resources, keyed by their path (e.g. `graphics/foo.png`, `audio/bar.mp3`). Load
+them at runtime through the `Assets` static class
+(`src/JohnnyAppleseed/Assets/Assets.cs`):
+
+```csharp
+Texture2D tex   = Assets.Texture("graphics/foo.png");   // cached
+Sound     click = Assets.Sound("audio/bar.mp3");        // cached
+byte[]    raw   = Assets.Bytes("some/embedded/file");   // anything else
 ```
 
-### Package for distribution
+So **the only step to add an asset is dropping the file into `graphics/` or
+`audio/`** — the build embeds it automatically and `Assets` can load it by key.
+The same applies to future level-data files; put them under one of these trees
+(or add a similarly-embedded tree) and read them with `Assets.Bytes`.
 
-```bash
-uv run scripts/package.py                  # all platforms
-uv run scripts/package.py windows-x64      # specific target
-uv run scripts/package.py --skip-download  # skip arm64 lib download
-```
+The window/app icon is a special case: it is *generated* from `graphics/icon.svg`
+at build time (rasterized to PNG/ICO/ICNS into `obj/`), since Raylib can't load
+SVG directly. Edit `icon.svg` to change the icon everywhere.
 
-Output lands in `dist/<target>/<target>.[ext]`.
+### Adding an input action
+
+Add a value to the `InputAction` enum and map it in `InputSystem`. Every scene
+picks up the new action automatically.
 
 ---
 
-## Platform support
+## The hardware probe (`src/JohnnyAppleseed.Probe`)
 
-| Target | Format | Native lib source |
-|---|---|---|
-| `windows-x64` | `.zip` containing `.exe` | Raylib-cs NuGet |
-| `linux-x64` | self-contained binary | Raylib-cs NuGet |
-| `macos-x64` | `.dmg` (HFS+ or ZIP-DMG) | Raylib-cs NuGet |
-| `macos-arm64` | `.dmg` | Raylib-cs NuGet |
-| `windows-arm64` | `.zip` | see below |
-| `linux-arm64` | self-contained binary | see below |
-
-### Why there is no linux-arm64 or windows-arm64 build out of the box
-
-The .NET managed code cross-compiles to every target without issue.  The
-problem is the **native Raylib shared library** (`libraylib.so` / `raylib.dll`).
-Raylib-cs 8.0.0's NuGet package bundles pre-compiled native libs only for the
-four targets listed above; linux-arm64 and win-arm64 are absent.
-
-**Why these two specifically?**
-
-Raylib on Linux requires a windowing backend.  The default desktop backend is
-GLFW compiled with X11 support, which means the native library must link
-against X11.  X11 is a *system* library — cross-compiling it from a Linux
-x64 host to an arm64 target requires either arm64 X11 development headers or
-a full arm64 sysroot.  Neither ships with a standard Linux install or with the
-Raylib-cs NuGet package.
-
-Windows arm64 (Snapdragon X / Surface Pro X) is a similarly niche build
-surface: MSVC arm64 cross-compilation is only available on Windows, and the
-MinGW/Zig-based alternative, while it works, has not been distributed through
-official Raylib channels.
-
-### Producing arm64 builds
-
-Use the setup script, which downloads Zig (a self-contained cross-compiler)
-and Raylib 6.0 source to `./build/` — nothing is installed system-wide:
+A separate, debug-only binary for measuring what real controllers and embedded
+assets actually do. It references the game project and reuses its internals
+(input layer, app-data paths, build stamp — exposed via `InternalsVisibleTo`),
+swapping the game loop for measurement logic, so what it reports is exactly what
+the game sees. It is deliberately **not** part of the packaging pipeline: build
+it locally on the machine under test.
 
 ```bash
-# Build libraylib.so for linux-arm64 and raylib.dll for win-arm64
-uv run scripts/setup-native-libs.py
-
-# Build one target at a time
-uv run scripts/setup-native-libs.py linux-arm64
-uv run scripts/setup-native-libs.py win-arm64
+uv run scripts/probe.py                    # interactive: live gamepad state + edge log
+uv run scripts/probe.py list               # gamepads (raylib) + input devices (Linux)
+uv run scripts/probe.py raw                # raw kernel events from /dev/input/js0
+uv run scripts/probe.py assets             # list assets embedded in the game binary
+uv run scripts/probe.py capture menu 1 out.png   # headless screenshot of a scene
+uv run scripts/probe.py selftest           # headless save + input self-tests
+uv run scripts/probe.py -c Release         # choose build config (default: Debug)
 ```
 
-After the script succeeds, re-run `package.py` — the `.csproj` conditionally
-includes the built native libs for their respective RIDs.
-
-**linux-arm64 note:** the script uses your host's X11 headers
-(`/usr/include/X11/`) during cross-compilation.  X11 headers are
-architecture-neutral C headers (no assembly, no hardware-specific sizes beyond
-standard LP64 types), so the host copy works correctly for the arm64 target.
-Install them if they are missing:
-
-```bash
-# Arch
-sudo pacman -S libx11 libxrandr libxi libxinerama libxcursor
-
-# Debian/Ubuntu
-sudo apt install libx11-dev libxrandr-dev libxi-dev libxinerama-dev libxcursor-dev
-```
-
-**win-arm64 note:** Zig bundles the Windows SDK headers (gdi32, winmm,
-opengl32), so no Windows installation is required on the Linux build host.
-The resulting DLL uses the GNU ABI (MinGW-style); this is ABI-compatible with
-the standard Windows calling convention for arm64 `cdecl` functions.
+The self-tests (save round-tripping/migration, gamepad selection policy) live
+here rather than in the game, so the shipped binary stays pure game logic.
+`raw` reads the Linux joystick device directly and needs read access to
+`/dev/input/jsN` (add yourself to the `input` group if you hit a permission
+error).
 
 ---
 
-## macOS DMG
+## Repository layout
 
-On macOS the packaging script uses `hdiutil` to produce a proper compressed
-UDIF image with a custom Finder window (custom background, icon positions).
-
-On Linux it falls back to a ZIP-format `.dmg` (standard HFS+ tools are not
-available without root).  Install `genisoimage` for a real HFS+ image:
-
-```bash
-sudo apt install genisoimage    # Debian/Ubuntu
-sudo pacman -S cdrtools         # Arch
 ```
-
----
-
-## Extending the game
-
-**Add a scene** — create a class in `Scenes/` that implements `IScene`.
-Return an instance of it from another scene's `Update` to transition.
-
-**Add an input action** — add a value to `InputAction` and map it in
-`InputSystem.IsPressed` / `IsDown`.  All scenes pick up the new action
-automatically.
-
-**Add a parallax layer** — construct a `ParallaxLayer` in
-`ParallaxBackground.Load()` and append it to `_layers`.
-
-**Add a render primitive** — extend `Rendering/` with new classes that wrap
-Raylib draw calls.  Raylib's API surface covers sprites, tilemaps, 3D meshes,
-shaders, render textures, and audio.
+src/JohnnyAppleseed/          the game (pure game logic)
+  Program.cs                  entry point → Game.Run()
+  Game.cs                     window, audio, input pass, scene loop
+  AppData.cs                  per-platform app-data folder
+  Scenes/  Input/  Rendering/  Story/  UI/  Save/  Platform/  Assets/
+src/JohnnyAppleseed.Probe/    debug/measurement tooling (not shipped)
+graphics/                     source images  → embedded into the binary
+audio/                        source sounds  → embedded into the binary
+scripts/                      uv-run Python: package / publish / native libs / probe / icons
+build/                        downloaded toolchains + source + caches (gitignored)
+dist/                         packaged, shippable artifacts
+www/                          landing page
+testbed/                      local VM helpers for manual cross-platform testing
+```
 
 ---
 

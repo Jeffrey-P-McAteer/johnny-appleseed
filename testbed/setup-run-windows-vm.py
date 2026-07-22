@@ -325,8 +325,9 @@ if not os.path.exists(vm_is_installed_flag_file):
       '-drive',   f'file={vm_qcow2},format=qcow2,if=ide',
       '-cdrom',   f'{install_iso}',
       '-boot',    'order=d,menu=on', # prefer cd drive as boot target
-      '-netdev',  'user,id=net0',
-      '-device',  'e1000,netdev=net0',
+# NO INTERNET FOR YOU! - forces local account setups
+#      '-netdev',  'user,id=net0',
+#      '-device',  'e1000,netdev=net0',
       '-device',  'qemu-xhci',
       '-device',  'usb-tablet',
       '-vga',     'std',
