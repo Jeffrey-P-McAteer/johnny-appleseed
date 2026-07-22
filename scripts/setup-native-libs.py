@@ -41,8 +41,9 @@ System requirements
       Arch:   sudo pacman -S wayland libx11
       Debian: sudo apt install libwayland-dev libx11-dev
 
-  Zig 0.14.0 is downloaded automatically to ./build/toolchains/ and is only
-  needed when linux-wayland is in the requested targets.
+  Zig 0.16.0 (required by Raylib 6.0's build.zig) is downloaded automatically to
+  ./build/toolchains/ and is only needed when linux-wayland is in the requested
+  targets.
 """
 
 from __future__ import annotations
@@ -73,14 +74,17 @@ RUNTIMES   = REPO_ROOT / "src" / "JohnnyAppleseed" / "runtimes"
 
 GITHUB_API = "https://api.github.com/repos/raysan5/raylib/releases/latest"
 
-# Zig 0.14.0 is required by Raylib 6.0's build.zig.
-ZIG_VERSION  = "0.14.0"
+# Raylib 6.0's build.zig.zon declares `.minimum_zig_version = "0.16.0"`; older Zig
+# (0.14/0.15) fails to compile it (`std.array_list.Managed`, `b.graph.environ_map`
+# are newer-Zig APIs). Zig 0.16.0 also RENAMED its release archives from
+# `zig-<os>-<arch>-<ver>` (0.14) to `zig-<arch>-<os>-<ver>`.
+ZIG_VERSION  = "0.16.0"
 ZIG_BASE_URL = f"https://ziglang.org/download/{ZIG_VERSION}"
 ZIG_ARCHIVES = {
-    "linux-x64":   f"zig-linux-x86_64-{ZIG_VERSION}.tar.xz",
-    "linux-arm64": f"zig-linux-aarch64-{ZIG_VERSION}.tar.xz",
-    "macos-x64":   f"zig-macos-x86_64-{ZIG_VERSION}.tar.xz",
-    "macos-arm64": f"zig-macos-aarch64-{ZIG_VERSION}.tar.xz",
+    "linux-x64":   f"zig-x86_64-linux-{ZIG_VERSION}.tar.xz",
+    "linux-arm64": f"zig-aarch64-linux-{ZIG_VERSION}.tar.xz",
+    "macos-x64":   f"zig-x86_64-macos-{ZIG_VERSION}.tar.xz",
+    "macos-arm64": f"zig-aarch64-macos-{ZIG_VERSION}.tar.xz",
 }
 
 # ── target definitions ─────────────────────────────────────────────────────────
@@ -469,7 +473,9 @@ def provision_zig_build(zig: Path, raylib: Path, cfg: dict) -> None:
     if zig_out.exists():
         shutil.rmtree(zig_out)
 
-    cmd = [str(zig), "build", "-Doptimize=ReleaseSafe", "-Dshared=true"]
+    # raylib 6.0 (Zig 0.16) replaced the old `-Dshared=true` with `-Dlinkage=<mode>`
+    # (std.builtin.LinkMode: dynamic|static).
+    cmd = [str(zig), "build", "-Doptimize=ReleaseSafe", "-Dlinkage=dynamic"]
     if cfg.get("zig_target"):
         cmd += [f"-Dtarget={cfg['zig_target']}"]
     if "display" in cfg:
@@ -487,7 +493,7 @@ def provision_zig_build(zig: Path, raylib: Path, cfg: dict) -> None:
     extra = f" -Dlinux_display_backend={cfg['display']}" if "display" in cfg else ""
     if cfg.get("config"):
         extra += f" -Dconfig='{' '.join(cfg['config'])}'"
-    print(f"  zig build -Dtarget={target_label} -Dshared=true{extra}")
+    print(f"  zig build -Dtarget={target_label} -Dlinkage=dynamic{extra}")
     print("  (streaming output — first run may take a minute)\n")
 
     result = subprocess.run(cmd, cwd=raylib, env=env)
@@ -565,20 +571,43 @@ def main() -> None:
         raylib_src  = ensure_raylib_source(tag)
         print()
 
+    # linux-wayland is built from source into the SAME file as the linux-x64
+    # download (runtimes/linux-x64/native/libraylib.so) — it is meant to REPLACE
+    # the stock lib with an X11+Wayland build that also enables extra image formats
+    # (JPG/BMP/TGA/PSD). If both are requested, the download runs first and the
+    # Wayland build is then skipped as "already have", silently leaving the stock
+    # (JPEG-less) lib in place. So when linux-wayland is requested, drop the plain
+    # linux-x64 download and let the Wayland build own the shared file.
+    targets = list(args.targets)
+    if "linux-wayland" in targets and "linux-x64" in targets:
+        targets.remove("linux-x64")
+        print("  Note: linux-wayland supersedes the linux-x64 download (shared lib "
+              "file) — skipping the plain download.\n")
+
     # ── provision each target ─────────────────────────────────────────────────
-    for name in args.targets:
-        cfg  = ALL_TARGETS[name]
-        dest = cfg["dest"]
+    for name in targets:
+        cfg      = ALL_TARGETS[name]
+        dest     = cfg["dest"]
+        sentinel = cfg.get("sentinel")
 
         bar = "─" * max(1, 60 - len(name))
         print(f"── [{name}] {bar}")
 
-        if dest.exists() and not args.rebuild:
+        # "Already have" must also see any required sentinel: a bare libraylib.so
+        # with no .wayland-enabled is a leftover stock download, not the Wayland
+        # build we want here — so let it (re)build rather than skipping.
+        have = dest.exists() and (sentinel is None or sentinel.exists())
+        if have and not args.rebuild:
             size = dest.stat().st_size // 1024
             print(f"  Already have: {dest.relative_to(REPO_ROOT)} ({size} KB)"
                   "  — pass --rebuild to force")
             print()
             continue
+
+        # Preserve an existing good lib: a failed (re)build must NOT destroy it.
+        backup = dest.parent / (dest.name + ".bak") if dest.exists() else None
+        if backup:
+            shutil.copy2(dest, backup)
 
         try:
             if name in BUILD_TARGETS:
@@ -586,11 +615,18 @@ def main() -> None:
                 provision_zig_build(zig, raylib_src, cfg)
             else:
                 provision_download(name, cfg, tag, assets)
+            if backup:
+                backup.unlink(missing_ok=True)          # success — drop the backup
         except Exception as exc:
             print(f"\n  ERROR: {exc}", file=sys.stderr)
-            dest.unlink(missing_ok=True)
-            if (sentinel := cfg.get("sentinel")) and sentinel.exists():
-                sentinel.unlink()
+            if backup and backup.exists():
+                backup.replace(dest)                    # restore previous good lib
+                print("  (kept the previous library — the failed build did not "
+                      "delete it)", file=sys.stderr)
+            else:
+                dest.unlink(missing_ok=True)
+                if sentinel and sentinel.exists():
+                    sentinel.unlink()
 
         print()
 
