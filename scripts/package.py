@@ -42,6 +42,8 @@ from pathlib import Path
 
 # Pure-Python HFS+/UDIF DMG builder — no system dependencies
 from _dmg import build_dmg as _build_dmg_hfs
+# SVG → .icns rasteriser (shared with the MSBuild icon pipeline)
+from _icons import write_icns
 
 # ── configuration ─────────────────────────────────────────────────────────────
 
@@ -49,6 +51,7 @@ REPO_ROOT   = Path(__file__).resolve().parent.parent
 PROJECT_CS  = REPO_ROOT / "src" / "JohnnyAppleseed" / "JohnnyAppleseed.csproj"
 DIST_DIR    = REPO_ROOT / "dist"
 NATIVE_DIR  = REPO_ROOT / "src" / "JohnnyAppleseed" / "runtimes"
+ICON_SVG    = REPO_ROOT / "graphics" / "icon.svg"
 
 APP_NAME      = "JohnnyAppleseed"
 APP_ID        = "com.johnnyseed.game"
@@ -199,6 +202,17 @@ def package_macos(target_name: str, rid: str) -> None:
         shutil.copy2(binary, app_binary)
         app_binary.chmod(app_binary.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
+        # App icon: rasterise graphics/icon.svg → Contents/Resources/AppIcon.icns
+        # (Raylib can't load SVG; Finder/Dock read the .icns from the bundle).
+        # Best-effort — a missing/failed icon must not fail packaging.
+        icon_file = None
+        if ICON_SVG.exists():
+            try:
+                write_icns(ICON_SVG, res_dir / "AppIcon.icns")
+                icon_file = "AppIcon"
+            except Exception as e:
+                print(f"  [warn] .icns generation failed ({e}); .app will use the default icon")
+
         # Info.plist
         plist = {
             "CFBundleName":             APP_NAME,
@@ -213,6 +227,8 @@ def package_macos(target_name: str, rid: str) -> None:
             "NSPrincipalClass":         "NSApplication",
             "LSMinimumSystemVersion":   "10.15",
         }
+        if icon_file:
+            plist["CFBundleIconFile"] = icon_file
         with open(app_bundle / "Contents" / "Info.plist", "wb") as f:
             plistlib.dump(plist, f)
 

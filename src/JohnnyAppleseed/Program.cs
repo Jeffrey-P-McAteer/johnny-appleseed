@@ -21,6 +21,14 @@ static class Program
             return rc;
         }
 
+        // List embedded assets (verifies audio/ + graphics/ made it into the binary).
+        if (Array.Exists(args, a => a is "--list-assets"))
+        {
+            foreach (string name in Assets.Names().OrderBy(n => n))
+                Console.WriteLine($"  {name}  ({Assets.Bytes(name).Length} bytes)");
+            return 0;
+        }
+
         // Dev screenshot: --capture-intro|--capture-menu [seconds] [out.png]
         int cap = Array.FindIndex(args, a => a.StartsWith("--capture"));
         if (cap >= 0)

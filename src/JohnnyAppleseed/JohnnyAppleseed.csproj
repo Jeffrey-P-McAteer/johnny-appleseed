@@ -32,6 +32,29 @@
     <PackageReference Include="Raylib-cs" Version="8.0.0" />
   </ItemGroup>
 
+  <!--
+    ══════════════════════════════════════════════════════════════════════════
+    Game assets — embedded into the assembly
+    ══════════════════════════════════════════════════════════════════════════
+    Every file under the repo's audio/ and graphics/ trees is compiled in as an
+    embedded resource, so the shipped single-file binary carries its assets with
+    no loose folder alongside it. The logical resource name mirrors the source
+    path (e.g. "graphics/icon.svg", "audio/click.mp3"); Assets.cs reads them via
+    the same Load*FromMemory idiom ParallaxBackground uses for its shader.
+    Existence-gated so a checkout without these folders still builds.
+
+    NOTE: the runtime window/app icon is *generated* from graphics/icon.svg by the
+    GenerateIcons target below (Raylib can't load SVG); that PNG/ICO lands in obj/.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\audio\**\*"
+                      Condition="Exists('$(MSBuildThisFileDirectory)..\..\audio')"
+                      LogicalName="audio/%(RecursiveDir)%(Filename)%(Extension)" />
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\graphics\**\*"
+                      Condition="Exists('$(MSBuildThisFileDirectory)..\..\graphics')"
+                      LogicalName="graphics/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
   <!-- Let the debug hardware-probe reuse internal classes (InputSystem, AppData,
        BuildInfo, …). Test/tooling access only; does not affect the shipped game. -->
   <ItemGroup>
@@ -132,6 +155,57 @@
     <ItemGroup>
       <Compile Include="$(IntermediateOutputPath)BuildInfo.cs" />
     </ItemGroup>
+  </Target>
+
+  <!--
+    ══════════════════════════════════════════════════════════════════════════
+    Icon generation: graphics/icon.svg → obj/{icon.png, icon.ico}
+    ══════════════════════════════════════════════════════════════════════════
+    Raylib cannot load SVG, so scripts/_icons.py rasterises the vector source to
+    the raster formats the icon pipeline needs, writing them into the gitignored
+    intermediate dir (obj/), alongside the generated BuildInfo.cs:
+
+      icon.png  → embedded resource; Game.cs calls Raylib.SetWindowIcon with it
+                  (window title bar on Windows + X11).
+      icon.ico  → <ApplicationIcon>; the .NET SDK stamps it into the Windows
+                  apphost .exe (Explorer / taskbar). Cross-platform: the SDK's
+                  managed PE resource writer stamps the win apphost even when
+                  publishing from Linux/macOS.
+
+    Best-effort: the <Exec> needs `uv` + Pillow. If they're unavailable it is
+    ignored (IgnoreExitCode) and the Exists()-gated items below simply don't apply
+    — the game builds fine, just without a custom icon. The macOS .app icon
+    (.icns) is generated separately by scripts/package.py at packaging time.
+  -->
+  <!-- Runs before AssignTargetPaths so the generated icon.png flows through the
+       normal resource-naming pipeline (CreateManifestResourceNames honours its
+       LogicalName). Adding an EmbeddedResource in a BeforeTargets=CoreCompile
+       target is too late — resource names are already assigned by then. -->
+  <Target Name="GenerateIcons" BeforeTargets="AssignTargetPaths;CoreCompile">
+    <PropertyGroup>
+      <_IconSvg>$(MSBuildThisFileDirectory)..\..\graphics\icon.svg</_IconSvg>
+      <_IconScript>$(MSBuildThisFileDirectory)..\..\scripts\_icons.py</_IconScript>
+      <_IconPng>$(IntermediateOutputPath)icon.png</_IconPng>
+      <_IconIco>$(IntermediateOutputPath)icon.ico</_IconIco>
+    </PropertyGroup>
+
+    <MakeDir Directories="$(IntermediateOutputPath)" />
+
+    <Exec Command="uv run &quot;$(_IconScript)&quot; &quot;$(_IconSvg)&quot; --png &quot;$(_IconPng)&quot; --png-size 256 --ico &quot;$(_IconIco)&quot;"
+          Condition="Exists('$(_IconSvg)') And Exists('$(_IconScript)')"
+          IgnoreExitCode="true"
+          StandardOutputImportance="low"
+          StandardErrorImportance="low" />
+
+    <!-- Embed the generated window icon (only if generation succeeded). -->
+    <ItemGroup Condition="Exists('$(_IconPng)')">
+      <EmbeddedResource Include="$(_IconPng)" LogicalName="graphics/icon.png" />
+    </ItemGroup>
+
+    <!-- Stamp the Windows apphost .exe icon (only if generation succeeded). -->
+    <PropertyGroup Condition="Exists('$(_IconIco)')">
+      <ApplicationIcon>$(_IconIco)</ApplicationIcon>
+    </PropertyGroup>
   </Target>
 
   <!--

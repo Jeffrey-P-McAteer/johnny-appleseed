@@ -31,6 +31,8 @@ static class Game
         Raylib.SetWindowMinSize(640, 360);
         Raylib.SetTargetFPS(60);
 
+        TrySetWindowIcon();
+
         // Load gamepad mappings now that GLFW is up; controllers are resolved
         // dynamically each frame in InputSystem.Update (hot-plug aware).
         InputSystem.Initialize();
@@ -66,6 +68,25 @@ static class Game
         }
 
         scene.Unload();
+        Assets.UnloadAll();
         Raylib.CloseWindow();
+    }
+
+    // Set the window/taskbar icon from the embedded, build-generated PNG
+    // (graphics/icon.svg → obj/icon.png). Honoured on Windows and X11. Cocoa
+    // (macOS) and native Wayland ignore per-window icons — the icon there comes
+    // from the .app bundle (.icns) or a .desktop file — so skip Wayland to avoid
+    // a spurious GLFW warning, and treat the whole thing as best-effort.
+    private static void TrySetWindowIcon()
+    {
+        if (OperatingSystem.IsLinux() && LinuxDisplay.Detected == LinuxDisplay.Backend.WaylandNative)
+            return;
+        if (!Assets.Exists("graphics/icon.png"))
+            return;
+
+        Image icon = Assets.LoadImage("graphics/icon.png");
+        Raylib.ImageFormat(ref icon, PixelFormat.UncompressedR8G8B8A8); // GLFW wants RGBA8
+        Raylib.SetWindowIcon(icon);
+        Raylib.UnloadImage(icon);
     }
 }
