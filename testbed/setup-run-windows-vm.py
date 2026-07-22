@@ -3,7 +3,7 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#
+#   "pyftpdlib>=1.5.10",
 # ]
 # ///
 
@@ -19,6 +19,7 @@ import pathlib
 import getpass
 import time
 import hashlib
+import threading
 
 def die(msg):
   print(msg)
@@ -118,114 +119,65 @@ def ovmf_to_qemu_args(code_path: str):
     return args
 
 
-def get_folder_size(path, follow_symlinks=False):
+class FtpShare:
     """
-    Compute total size of a folder in bytes.
+    Serve a host directory to the VM over FTP, in-process.
 
-    Args:
-        path (str or Path): Folder path
-        follow_symlinks (bool): Whether to include symlink targets
+    Replaces the old "build a FAT32 .img on the host and attach it as a USB
+    drive" approach (which had host-page-cache vs. guest coherency problems and
+    needed sudo/losetup/parted/mkfs). Files are read live from disk per request,
+    and the read+write user makes it two-way (the guest can upload logs back to
+    the host).
 
-    Returns:
-        int: Total size in bytes
+    Networking: with QEMU user-mode networking the guest reaches the host at the
+    gateway 10.0.2.2, which SLIRP forwards to the host's loopback — so we bind to
+    127.0.0.1 (keeps this writable FTP off the LAN) and advertise 10.0.2.2 to the
+    guest. FTP MUST be passive here: in active mode the server connects back to
+    the guest, which SLIRP blocks. Hence masquerade_address + a fixed
+    passive_ports range, all reachable from the guest as 10.0.2.2:<port> without
+    any QEMU hostfwd. (If your libslirp routes 10.0.2.2 somewhere other than
+    loopback and the guest can't connect, change host to '0.0.0.0'.)
     """
-    path = pathlib.Path(path)
-    total_size = 0
+    def __init__(self, root, host='127.0.0.1', port=2121,
+                 user='test', password='test',
+                 masquerade='10.0.2.2', passive_ports=range(50000, 50021)):
+        from pyftpdlib.authorizers import DummyAuthorizer
+        from pyftpdlib.handlers import FTPHandler
+        from pyftpdlib.servers import FTPServer
 
-    for root, dirs, files in os.walk(path, followlinks=follow_symlinks):
-        for name in files:
-            file_path = pathlib.Path(root) / name
-            try:
-                if not follow_symlinks and file_path.is_symlink():
-                    continue
-                total_size += file_path.stat().st_size
-            except (FileNotFoundError, PermissionError):
-                # Skip files that disappear or are inaccessible
-                continue
+        os.makedirs(root, exist_ok=True)
 
-    return total_size
+        authorizer = DummyAuthorizer()
+        # perm 'elradfmwMT' = full read + write (list/retrieve + store/mkdir/
+        # delete/rename/append/…) so the guest can both fetch builds and push logs.
+        authorizer.add_user(user, password, root, perm='elradfmwMT')
 
-def create_windows_drive(source_dir, output_img, size_mb=-1):
-    if size_mb <= 0:
-      size_mb = int( (get_folder_size(source_dir) / 1_000_000.0) * 2.0 ) # 2x larger than the input folder.
-    if size_mb <= 64:
-      size_mb = 64 # if folder empty, bump size to some decent minimum.
+        handler = FTPHandler
+        handler.authorizer = authorizer
+        handler.masquerade_address = masquerade
+        handler.passive_ports = list(passive_ports)
+        handler.banner = 'johnny-appleseed testbed FTP'
 
-    source_dir = pathlib.Path(source_dir).resolve()
-    output_img = pathlib.Path(output_img).resolve()
+        self.server = FTPServer((host, port), handler)
+        self.host = host
+        self.port = port
+        self.user = user
+        self.password = password
+        self.masquerade = masquerade
+        self.root = root
+        self._thread = None
 
-    if not source_dir.exists():
-        raise FileNotFoundError(source_dir)
+    def start(self):
+        self._thread = threading.Thread(
+            target=self.server.serve_forever, name='ftp-share', daemon=True)
+        self._thread.start()
+        print(f'FTP share serving {self.root} on {self.host}:{self.port}')
 
-    if os.path.exists(output_img):
-      os.remove(output_img)
-
-    pretty_cmd('sync')
-
-    # 1. Create VHDX disk image (empty)
-    pretty_cmd(
-        'qemu-img', 'create',
-        '-f', 'raw',
-        str(output_img),
-        f'{size_mb}M'
-    )
-
-    # 2. Attach loop device
-    loop_dev = subprocess.check_output([
-        'sudo', 'losetup', '--find', '--show', str(output_img)
-    ]).decode().strip()
-    expected_partition_dev = loop_dev+'p1'
-
-    pretty_cmd('sudo', 'blockdev', '--flushbufs', loop_dev)
-
-    print('Loop device:', loop_dev)
-
-    mount_dir = tempfile.mkdtemp(prefix='winimg_')
-
-    try:
-        pretty_cmd('sudo', 'parted', loop_dev, '--script', 'mklabel', 'gpt', 'mkpart', 'primary', 'fat32', '1MiB', '98%')
-
-        pretty_cmd('sync')
-        pretty_cmd('sudo', 'blockdev', '--flushbufs', loop_dev)
-
-        # 3. Create Windows-compatible filesystem
-        pretty_cmd('sudo', 'mkfs.vfat', '-F', '32', expected_partition_dev)
-
-        pretty_cmd('sync')
-        pretty_cmd('sudo', 'blockdev', '--flushbufs', loop_dev)
-
-        # 4. Mount it, with user perms
-        pretty_cmd('sudo', 'mount', '-o', f'uid={os.getuid()},gid={os.getgid()}', expected_partition_dev, mount_dir)
-
-        pretty_cmd('sync')
-        pretty_cmd('sudo', 'blockdev', '--flushbufs', loop_dev)
-
-        # 5. Copy files
-        pretty_cmd(
-            'rsync', '-a', '--info=progress2',
-            str(source_dir) + '/',
-            mount_dir + '/'
-        )
-
-        pretty_cmd('ls', '-alh', mount_dir)
-
-        pretty_cmd('sync')
-        pretty_cmd('sudo', 'blockdev', '--flushbufs', loop_dev)
-
-    finally:
-        # Cleanup
+    def stop(self):
         try:
-            pretty_cmd('sudo', 'umount', mount_dir)
-            pretty_cmd('sync')
+            self.server.close_all()
         except Exception:
             pass
-
-        pretty_cmd('sudo', 'losetup', '-d', loop_dev)
-        pretty_cmd('sync')
-        shutil.rmtree(mount_dir)
-
-    print(f'Created Windows usb drive: {output_img}')
-    return output_img
 
 def deterministic_mac(seed):
     h = hashlib.sha256(str(seed).encode()).digest()
@@ -247,8 +199,6 @@ testbed_folder = os.path.dirname(os.path.realpath(__file__))
 
 req_bins = [
   'qemu-system-x86_64', 'qemu-img',
-  'sudo', 'losetup', 'mkfs.vfat', 'rsync',
-  'parted',
 ]
 
 for b in req_bins:
@@ -347,40 +297,55 @@ if not os.path.exists(vm_is_installed_flag_file):
 
 print(f'OS install is complete, we see the flag file {vm_is_installed_flag_file}')
 
-# We just need the windows-x64 build files
-test_artifacts_folder = os.path.abspath( os.path.join(testbed_folder, '..', 'dist', 'windows-x64') )
-os.makedirs(test_artifacts_folder, exist_ok=True)
+# Expose the whole ./dist/ tree to the VM over FTP (replaces the old USB .img),
+# so any target's artifacts can be picked from inside the guest, and logs can be
+# copied back out to the host by uploading into dist/_from_vm/.
+dist_folder = os.path.abspath(os.path.join(testbed_folder, '..', 'dist'))
+os.makedirs(dist_folder, exist_ok=True)
+from_vm_folder = os.path.join(dist_folder, '_from_vm')
+os.makedirs(from_vm_folder, exist_ok=True)
+
+ftp = FtpShare(dist_folder)
+ftp.start()
+
+guest_url = f'ftp://{ftp.user}:{ftp.password}@{ftp.masquerade}:{ftp.port}/'
 print()
-print(f'Note: Move test files into the folder {test_artifacts_folder}')
+print('┌─ Test artifacts are shared over FTP ' + ('─' * 31))
+print(f'│  Host folder    : {dist_folder}')
+print(f'│  From the VM    : {guest_url}')
+print( '│  In Explorer    : paste that URL into the address bar (uses passive mode)')
+print( '│  Do NOT use ftp.exe — it is active-mode and the VM NAT blocks it')
+print(f'│  Copy logs out  : upload files into /_from_vm/  →  {from_vm_folder}')
+print( '│  PowerShell upload example (run inside the VM):')
+print(f'│    $c=New-Object Net.WebClient; $c.Credentials=New-Object Net.NetworkCredential("{ftp.user}","{ftp.password}")')
+print(f'│    $c.UploadFile("ftp://{ftp.masquerade}:{ftp.port}/_from_vm/log.txt","C:\\path\\to\\log.txt")')
+print('└' + ('─' * 67))
 print()
 
-test_vm_disk_image = os.path.join(vm_data_folder, 'windows-vm-test-artifact-disk.img')
-test_vm_disk_image = create_windows_drive(test_artifacts_folder, test_vm_disk_image)
+try:
+  pretty_cmd(
+    qemu_system_exe,
+      '-enable-kvm',
+      '-m',       str(int(1024 * 16)), # 16gb ram
+      '-smp',     '4',
+      '-cpu',     'host',
+      '-machine', 'q35',
+      *ovmf_to_qemu_args(ovmf_code_fd_file),
+      '-drive',   f'file={vm_qcow2},format=qcow2,if=ide',
+      '-netdev',  'user,id=net0',
+      '-device',  'e1000,netdev=net0',
+      '-device',  'qemu-xhci',
+      '-device',  'usb-tablet',
+      '-vga',     'none',
+      # '-device',  'qxl-vga'
+      '-device',  'virtio-vga-gl',
+      '-display', 'gtk,gl=on,show-menubar=off',
 
-time.sleep(0.5) # idk cache nonsense after create_windows_drive
+      # Requires the qemu-xhci device above, list ALL game controller vendor and device IDs we use here
+      '-device', 'usb-host,vendorid=0x045e,productid=0x028e',
 
-pretty_cmd(
-  qemu_system_exe,
-    '-enable-kvm',
-    '-m',       str(int(1024 * 16)), # 16gb ram
-    '-smp',     '4',
-    '-cpu',     'host',
-    '-machine', 'q35',
-    *ovmf_to_qemu_args(ovmf_code_fd_file),
-    '-drive',   f'file={vm_qcow2},format=qcow2,if=ide',
-    '-drive',   f'file={test_vm_disk_image},format=raw,if=ide',
-    '-netdev',  'user,id=net0',
-    '-device',  'e1000,netdev=net0',
-    '-device',  'qemu-xhci',
-    '-device',  'usb-tablet',
-    '-vga',     'none',
-    # '-device',  'qxl-vga'
-    '-device',  'virtio-vga-gl',
-    '-display', 'gtk,gl=on,show-menubar=off',
-
-    # Requires the qemu-xhci device above, list ALL game controller vendor and device IDs we use here
-    '-device', 'usb-host,vendorid=0x045e,productid=0x028e',
-
-cwd=vm_data_folder)
+  cwd=vm_data_folder)
+finally:
+  ftp.stop()
 
 
