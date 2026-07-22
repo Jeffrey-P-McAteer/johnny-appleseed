@@ -77,11 +77,12 @@ the executable or in the app-data folder — `InputSystem.Initialize()` loads it
 mappings already cover most mainstream controllers.
 
 The selection policy (`InputSystem.SelectActiveGamepad`) is pure and unit-tested
-headlessly:
+headlessly. The self-tests live in the [hardware probe](#hardware-probe-srcjohnnyappleseedprobe),
+so the game binary stays just game logic:
 
 ```bash
-dotnet run --project src/JohnnyAppleseed/JohnnyAppleseed.csproj -- --selftest-input
-dotnet run --project src/JohnnyAppleseed/JohnnyAppleseed.csproj -- --selftest        # all suites
+uv run scripts/probe.py selftest input
+uv run scripts/probe.py selftest         # both suites (save + input)
 ```
 
 ### Parallax background (`Rendering/`)
@@ -125,17 +126,17 @@ A single auto-save slot is stored as human-readable JSON in the app-data folder
 Serialization uses a `System.Text.Json` source-generated context
 (`Save/SaveJsonContext.cs`) so it works under single-file/self-contained publish.
 
-Verify the save/resume behaviour headlessly (no window):
+Verify the save/resume behaviour headlessly (no window) via the probe:
 
 ```bash
-dotnet run --project src/JohnnyAppleseed/JohnnyAppleseed.csproj -- --selftest-save
+uv run scripts/probe.py selftest save
 ```
 
-Capture a screenshot of a scene for visual checks:
+Capture a screenshot of a scene for visual checks (also via the probe):
 
 ```bash
-dotnet run --project src/JohnnyAppleseed/JohnnyAppleseed.csproj -- --capture-intro 3 shot.png
-dotnet run --project src/JohnnyAppleseed/JohnnyAppleseed.csproj -- --capture-menu 1 menu.png
+uv run scripts/probe.py capture intro 3 shot.png
+uv run scripts/probe.py capture menu 1 menu.png
 ```
 
 ### Hardware probe (`src/JohnnyAppleseed.Probe`)
@@ -150,11 +151,14 @@ machine under test.
 Run it via the uv-style wrapper:
 
 ```bash
-uv run scripts/probe.py            # interactive: live gamepad state + edge log
-uv run scripts/probe.py list       # enumerate gamepads (raylib) + input devices (Linux)
-uv run scripts/probe.py raw        # raw kernel events from /dev/input/js0
+uv run scripts/probe.py                     # interactive: live gamepad state + edge log
+uv run scripts/probe.py list                # enumerate gamepads (raylib) + input devices (Linux)
+uv run scripts/probe.py raw                 # raw kernel events from /dev/input/js0
 uv run scripts/probe.py raw /dev/input/js1
-uv run scripts/probe.py -c Release # choose build config (default: Debug)
+uv run scripts/probe.py assets              # list assets embedded in the game binary
+uv run scripts/probe.py capture menu 1 out.png   # headless screenshot of a scene
+uv run scripts/probe.py selftest            # headless save + input self-tests
+uv run scripts/probe.py -c Release          # choose build config (default: Debug)
 ```
 
 - **interactive** opens a window and logs every button/axis edge to the console

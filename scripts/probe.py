@@ -16,10 +16,16 @@ Usage (from repo root):
     uv run scripts/probe.py list            # enumerate gamepads + input devices
     uv run scripts/probe.py raw             # raw kernel events from /dev/input/js0
     uv run scripts/probe.py raw /dev/input/js1
+    uv run scripts/probe.py assets          # list assets embedded in the game binary
+    uv run scripts/probe.py capture menu 1 out.png   # headless scene screenshot
+    uv run scripts/probe.py selftest        # headless save + input self-tests
 
     uv run scripts/probe.py -c Debug        # pick a build config (default: Debug)
 
 Any argument that isn't a known runner flag is forwarded to the probe binary.
+The probe also hosts the dev/debug tooling that used to live in the game
+(assets listing, scene capture, self-tests), keeping src/JohnnyAppleseed as
+pure game logic.
 """
 
 from __future__ import annotations

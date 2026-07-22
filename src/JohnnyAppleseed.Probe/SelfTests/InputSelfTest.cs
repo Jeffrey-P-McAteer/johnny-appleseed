@@ -1,15 +1,17 @@
+using JohnnyAppleseed.Input;
 using GC = JohnnyAppleseed.Input.InputSystem.GamepadCandidate;
 
-namespace JohnnyAppleseed.Input;
+namespace JohnnyAppleseed.Probe;
 
 /// <summary>
 /// Headless verification of the active-gamepad selection policy
 /// (<see cref="InputSystem.SelectActiveGamepad"/>). The policy is pure — it takes
 /// a snapshot of every slot (availability, recent event count, realness score) —
 /// so the full "track four pads, pick the one being used, fall back to the least
-/// virtual" behaviour is checked without any real hardware.
+/// virtual" behaviour is checked without any real hardware. Reaches the game's
+/// internal input policy through InternalsVisibleTo.
 ///
-/// Run via <c>JohnnyAppleseed --selftest-input</c>. Exit code 0 = all passed.
+/// Run via <c>uv run scripts/probe.py selftest input</c>. Exit code 0 = all passed.
 /// </summary>
 static class InputSelfTest
 {

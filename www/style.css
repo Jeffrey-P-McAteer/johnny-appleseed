@@ -56,7 +56,8 @@ img#banner {
     display: block;
 
     width: 100%;
-    height: 850px;
+    max-width: 99.99vw;
+    height: auto;
 
     object-fit: cover;
     object-position: top;
@@ -71,7 +72,7 @@ main {
 
     max-width: 900px;
 
-    margin: -450px auto 4rem auto;
+    margin: -1250px auto 4rem auto;
     padding: 1rem 3rem;
 
     background: var(--panel);

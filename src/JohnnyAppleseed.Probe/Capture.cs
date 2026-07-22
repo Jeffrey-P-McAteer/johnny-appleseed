@@ -2,14 +2,15 @@ using Raylib_cs;
 using JohnnyAppleseed.Input;
 using JohnnyAppleseed.Scenes;
 
-namespace JohnnyAppleseed.Dev;
+namespace JohnnyAppleseed.Probe;
 
 /// <summary>
 /// Developer aid: renders a scene for a fixed amount of simulated time and writes
 /// a PNG screenshot, then exits — no user interaction. Handy for eyeballing UI
 /// (e.g. the intro typewriter mid-reveal) in a headless/CI context.
 ///
-/// Invoked via <c>JohnnyAppleseed --capture-intro [seconds] [out.png]</c>.
+/// Invoked via <c>uv run scripts/probe.py capture [menu|intro] [seconds] [out.png]</c>.
+/// Lives in the probe (not the game) so the shipped game stays just game logic.
 /// </summary>
 static class Capture
 {

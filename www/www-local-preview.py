@@ -27,7 +27,7 @@ WEB_ROOT = ROOT
 
 # Additional virtual mounts
 MOUNTS = {
-    #"/graphics": ROOT.parent / "graphics",
+    "/graphics": ROOT.parent / "graphics",
     #"/historic-progress": ROOT.parent / "historic-progress",
 }
 

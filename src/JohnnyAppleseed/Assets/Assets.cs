@@ -26,9 +26,6 @@ static class Assets
     /// <summary>True if an embedded resource with this logical key exists.</summary>
     public static bool Exists(string key) => Asm.GetManifestResourceInfo(key) is not null;
 
-    /// <summary>All embedded resource keys — diagnostics / tooling.</summary>
-    public static IReadOnlyList<string> Names() => Asm.GetManifestResourceNames();
-
     /// <summary>Raw bytes of an embedded asset. Throws if the key is missing.</summary>
     public static byte[] Bytes(string key)
     {

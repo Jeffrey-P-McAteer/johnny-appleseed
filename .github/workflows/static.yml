@@ -35,10 +35,10 @@ jobs:
 # Make any automated generation occur in this step
       - name: Copy assets into www folder
         run: |
-          #mkdir -p www/graphics
+          mkdir -p www/graphics
           #mkdir -p www/historic-progress
 
-          #cp -r graphics/* www/graphics/ || true
+          cp -r graphics/* www/graphics/ || true
           #cp -r historic-progress/* www/historic-progress/ || true
 
           find www/ -type f \

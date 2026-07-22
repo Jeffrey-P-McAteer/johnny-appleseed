@@ -1,10 +1,13 @@
-namespace JohnnyAppleseed.Save;
+using JohnnyAppleseed.Save;
+
+namespace JohnnyAppleseed.Probe;
 
 /// <summary>
 /// Headless verification of the save format and intro-resume logic. Runs without
-/// a window (invoked via <c>JohnnyAppleseed --selftest-save</c>) so the "save
-/// during the intro, resume where we left off" behaviour can be checked in CI or
-/// from the command line.
+/// a window (invoked via <c>uv run scripts/probe.py selftest save</c>) so the
+/// "save during the intro, resume where we left off" behaviour can be checked in
+/// CI or from the command line. Reaches the game's internal save layer through
+/// InternalsVisibleTo.
 ///
 /// Returns a process exit code: 0 = all passed, 1 = a check failed.
 /// </summary>
