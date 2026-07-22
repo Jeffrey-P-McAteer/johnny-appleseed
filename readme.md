@@ -2,6 +2,9 @@
 
 A 2D cross-platform game written in C# using [Raylib-cs](https://github.com/raylib-cs/raylib-cs) (Raylib 6.0).  The current build presents a main menu with a rotating parallax background.  Future development will expand on the scene system laid out here.
 
+[Landing Page](https://jeffrey-p-mcateer.github.io/johnny-appleseed)
+
+
 ---
 
 ## Architecture
