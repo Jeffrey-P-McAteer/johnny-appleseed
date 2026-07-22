@@ -335,7 +335,7 @@ if not os.path.exists(vm_is_installed_flag_file):
       '-display', 'gtk',
   cwd=vm_data_folder)
 
-  os_was_installed = ask_user_yn_question(f'Did OS install complete to your satisfaction?')
+  os_was_installed = ask_user_yn_question(f'Did OS install complete to your satisfaction? ')
   if not os_was_installed:
     die(f'Exiting because OS was not installed, re-run this script to launch VM in install mode again when you are ready.')
 
