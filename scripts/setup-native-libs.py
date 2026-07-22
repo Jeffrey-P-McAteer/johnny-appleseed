@@ -19,6 +19,8 @@ Targets
   linux-arm64     Download official release binary  ← was broken on 5.5; fixed for 6.0+
   linux-wayland   Build from source (Zig) — X11 + Wayland multi-platform backend
   win-x64         Download official release binary (mingw-w64 build)
+  win-x64-ndebug  Build from source (Zig) — mingw ABI with NDEBUG (asserts OFF), so
+                  no-OpenGL machines fail gracefully instead of abort()ing in GLFW
   win-arm64       Download official release binary  ← was Zig cross-compile; now download
   macos-x64       Download official release binary (universal fat Mach-O)
   macos-arm64     Download official release binary (same fat binary as macos-x64)
@@ -153,6 +155,33 @@ DOWNLOAD_TARGETS: dict[str, dict] = {
 }
 
 BUILD_TARGETS: dict[str, dict] = {
+    # From-source win-x64 built with Zig's NDEBUG (Release) mode so GLFW/raylib
+    # assert()s are compiled OUT. The stock mingw download ships with asserts ON,
+    # so on a machine with no usable OpenGL, a raylib call that receives GLFW's
+    # NULL window handle (e.g. glfwSetWindowSizeLimits) abort()s with a raw
+    # "Assertion failed" box that our managed startup-error dialog can't catch.
+    # With asserts stripped, those paths no longer abort — belt-and-suspenders on
+    # top of the IsWindowReady() guard in Game.Run. Zig bundles the MinGW + Windows
+    # SDK headers, so this cross-compiles from Linux with NO system packages, and
+    # produces the same GNU/cdecl ABI DLL the download target does (P/Invoke-safe,
+    # no MSVC redistributable). Shares the win-x64 dest, so package.py's existing
+    # RID override picks it up unchanged.
+    "win-x64-ndebug": {
+        "zig_target":  "x86_64-windows-gnu",
+        "out_name":    "raylib.dll",     # Windows DLLs land in zig-out/bin/
+        "dest":        RUNTIMES / "win-x64" / "native" / "raylib.dll",
+        "sentinel":    RUNTIMES / "win-x64" / "native" / ".ndebug-enabled",
+        "pe_machine":  0x8664,           # IMAGE_FILE_MACHINE_AMD64
+        # From-source builds default these image loaders OFF (raylib config.h
+        # #ifndef guards); the download build ships them ON. Re-enable so the
+        # embedded still-life .jpg still decodes — same fix as linux-wayland.
+        "config": [
+            "-DSUPPORT_FILEFORMAT_JPG=1",
+            "-DSUPPORT_FILEFORMAT_BMP=1",
+            "-DSUPPORT_FILEFORMAT_TGA=1",
+            "-DSUPPORT_FILEFORMAT_PSD=1",
+        ],
+    },
     # Build natively (no -Dtarget) so Zig uses pkg-config to discover system
     # libraries (X11, GLX, wayland-client, xkbcommon, …).  An explicit
     # cross-target breaks system-library discovery on Linux and produces errors.
@@ -468,7 +497,40 @@ def check_wayland_requirements() -> None:
         )
 
 
+def disable_zig_examples(raylib: Path) -> None:
+    """
+    raylib's build.zig installs every example program into the default build
+    step, so a plain `zig build` also compiles ~250 example exes.  We only want
+    the library, and on the Windows cross-target one example (rlgl_standalone,
+    which reaches into GLFW internals) fails to *link* — which would fail the
+    whole build even though libraylib built fine.
+
+    Neutralize the per-example install so the default step builds only the lib.
+    Best-effort and idempotent: patches the single `b.installArtifact(exe);`
+    line (the lib uses a different variable, `lib`, and is left intact).  If a
+    future raylib restructures build.zig and the line isn't found, we leave it
+    alone and rely on the post-build library verification below.
+    """
+    build_zig = raylib / "build.zig"
+    text = build_zig.read_text()
+    needle = "        b.installArtifact(exe);\n"
+    if needle in text:
+        text = text.replace(
+            needle,
+            "        // b.installArtifact(exe);  // disabled by "
+            "setup-native-libs.py — build the library only\n",
+            1,
+        )
+        build_zig.write_text(text)
+        print("  Patched build.zig: examples excluded from the default build")
+    elif "disabled by setup-native-libs.py" not in text:
+        print("  Note: example-install line not found in build.zig — relying on "
+              "post-build library verification instead")
+
+
 def provision_zig_build(zig: Path, raylib: Path, cfg: dict) -> None:
+    disable_zig_examples(raylib)
+
     zig_out = raylib / "zig-out"
     if zig_out.exists():
         shutil.rmtree(zig_out)
@@ -497,8 +559,12 @@ def provision_zig_build(zig: Path, raylib: Path, cfg: dict) -> None:
     print("  (streaming output — first run may take a minute)\n")
 
     result = subprocess.run(cmd, cwd=raylib, env=env)
+    # Don't hard-fail on a non-zero exit: we only need the library, and a stray
+    # example that fails to build/link must not sink the whole run. The real
+    # gate is whether a verified library artifact was produced (checked below).
     if result.returncode != 0:
-        raise RuntimeError(f"`zig build` exited with code {result.returncode}")
+        print(f"  Note: `zig build` exited {result.returncode} — checking for the "
+              "library artifact anyway (an example may have failed to build)")
 
     # Search for the output lib (glob handles versioned names like libraylib.so.6.0)
     out_glob = cfg["out_name"]
@@ -583,6 +649,14 @@ def main() -> None:
         targets.remove("linux-x64")
         print("  Note: linux-wayland supersedes the linux-x64 download (shared lib "
               "file) — skipping the plain download.\n")
+    # Same story for Windows: the NDEBUG from-source build and the mingw download
+    # write the same runtimes/win-x64/native/raylib.dll. If both are requested the
+    # download would run first and the build would then skip as "already have",
+    # silently leaving the asserts-enabled stock DLL in place — so drop it.
+    if "win-x64-ndebug" in targets and "win-x64" in targets:
+        targets.remove("win-x64")
+        print("  Note: win-x64-ndebug supersedes the win-x64 download (shared lib "
+              "file) — skipping the plain download.\n")
 
     # ── provision each target ─────────────────────────────────────────────────
     for name in targets:
@@ -611,7 +685,11 @@ def main() -> None:
 
         try:
             if name in BUILD_TARGETS:
-                check_wayland_requirements()
+                # Only the Linux X11/Wayland backend build needs host system
+                # headers; the Windows cross-compile is fully self-contained (Zig
+                # bundles MinGW + the Windows SDK).
+                if "display" in cfg:
+                    check_wayland_requirements()
                 provision_zig_build(zig, raylib_src, cfg)
             else:
                 provision_download(name, cfg, tag, assets)

@@ -374,7 +374,8 @@ pretty_cmd(
     '-device',  'qemu-xhci',
     '-device',  'usb-tablet',
     '-vga',     'none',
-    '-device',  'qxl-vga',
+    # '-device',  'qxl-vga'
+    '-device',  'virtio-vga-gl',
     '-display', 'gtk,gl=on,show-menubar=off',
 
     # Requires the qemu-xhci device above, list ALL game controller vendor and device IDs we use here

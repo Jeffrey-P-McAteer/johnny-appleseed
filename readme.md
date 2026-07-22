@@ -104,15 +104,34 @@ system-wide — it downloads Zig and Raylib source into `./build/` and produces 
 missing libraries:
 
 ```bash
-uv run scripts/setup-native-libs.py linux-arm64   # libraylib.so for arm64
-uv run scripts/setup-native-libs.py win-arm64      # raylib.dll for arm64
-uv run scripts/setup-native-libs.py linux-wayland  # native-Wayland libraylib.so
+uv run scripts/setup-native-libs.py linux-arm64     # libraylib.so for arm64
+uv run scripts/setup-native-libs.py win-arm64        # raylib.dll for arm64
+uv run scripts/setup-native-libs.py linux-wayland    # native-Wayland libraylib.so
+uv run scripts/setup-native-libs.py win-x64-ndebug   # asserts-off win-x64 raylib.dll
 ```
 
 When a native lib exists under `runtimes/<RID>/native/`, the `.csproj`
 conditionally overrides the NuGet default for that platform; a clean checkout
 with an empty `runtimes/` simply uses the NuGet libraries. After running the
-setup script, re-run `package.py` to pick the new libs up.
+setup script, re-run `package.py` to pick the new libs up. A no-argument
+`setup-native-libs.py` provisions every target, and `win-x64-ndebug` supersedes
+the plain `win-x64` download.
+
+### Graceful startup failures (`win-x64-ndebug`)
+
+If the graphics device can't initialize — most often **no compatible OpenGL 3.3
+driver**, common on virtual machines and remote desktops — the game surfaces a
+native error dialog (`Platform/StartupError.cs`) instead of dying silently.
+`Game.Run` throws when `Raylib.IsWindowReady()` is false after `InitWindow`, and
+`Program.Main` routes that to the dialog.
+
+There's one native-code wrinkle: the **stock** mingw `win-x64` raylib is built
+with `assert()` enabled, so on an OpenGL-less machine a raylib call handed GLFW's
+NULL window can `abort()` with a raw "Assertion failed" box that managed code
+can't catch. The `win-x64-ndebug` target rebuilds `raylib.dll` from source with
+Zig in NDEBUG (asserts compiled out), so those paths fail gracefully and flow
+through the dialog. It's the same P/Invoke-safe GNU/cdecl ABI as the download and
+re-enables the JPG/BMP/TGA/PSD image loaders (off by default in source builds).
 
 The stock `linux-x64` native is **X11-only**, so on a Wayland session the game
 runs through XWayland by default (safe everywhere). For native Wayland (better

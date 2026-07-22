@@ -28,6 +28,19 @@ static class Game
 
         Raylib.SetConfigFlags(ConfigFlags.ResizableWindow | ConfigFlags.VSyncHint);
         Raylib.InitWindow(1280, 720, "Johnny Appleseed");
+
+        // If the graphics device couldn't come up (e.g. no compatible OpenGL 3.3
+        // driver — common on VMs / remote desktops), surface it as a managed
+        // exception so Program.Main can show the native startup-error dialog
+        // instead of limping on into a blank or broken window. NOTE: this only
+        // catches the case where raylib *returns* from InitWindow; some native
+        // raylib builds abort() inside GLFW before we regain control (see readme).
+        if (!Raylib.IsWindowReady())
+            throw new InvalidOperationException(
+                "The graphics device failed to initialize — the window or its " +
+                "OpenGL 3.3 context could not be created. This usually means the " +
+                "system has no compatible GPU/driver (common on virtual machines " +
+                "and remote desktop sessions).");
         Raylib.SetWindowMinSize(640, 360);
         Raylib.SetTargetFPS(60);
 
