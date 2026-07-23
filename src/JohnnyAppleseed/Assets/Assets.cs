@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.InteropServices;
 using Raylib_cs;
 
 namespace JohnnyAppleseed;
@@ -22,6 +23,11 @@ static class Assets
     private static readonly Assembly Asm = typeof(Assets).Assembly;
     private static readonly Dictionary<string, Texture2D> _textures = new();
     private static readonly Dictionary<string, Sound> _sounds = new();
+    // Music streams decode lazily, so raylib keeps a pointer into the source
+    // bytes — we pin them (GCHandle) for the stream's lifetime and free both in
+    // UnloadAll. (Sounds, by contrast, are fully decoded up front, so their bytes
+    // need no pinning.)
+    private static readonly Dictionary<string, (Music music, GCHandle pin)> _music = new();
 
     /// <summary>True if an embedded resource with this logical key exists.</summary>
     public static bool Exists(string key) => Asm.GetManifestResourceInfo(key) is not null;
@@ -79,9 +85,32 @@ static class Assets
     }
 
     /// <summary>
+    /// A streamed music track for an embedded audio file, opened on first use and
+    /// cached. Unlike <see cref="Sound"/> (fully decoded, good for short SFX),
+    /// music is streamed, so the caller must pump it every frame via
+    /// <c>Raylib.UpdateMusicStream</c> — see <see cref="Audio.MusicManager"/>,
+    /// which does this and handles looping/cross-fading. Requires the audio device
+    /// to be initialised. Do not unload the returned stream directly; call
+    /// <see cref="UnloadAll"/>.
+    /// </summary>
+    public static Music Music(string key)
+    {
+        if (_music.TryGetValue(key, out (Music music, GCHandle pin) cached))
+            return cached.music;
+
+        byte[] bytes = Bytes(key);
+        // Pin so the GC can neither move nor collect the buffer while raylib
+        // streams from it; freed in UnloadAll.
+        var pin = GCHandle.Alloc(bytes, GCHandleType.Pinned);
+        Music music = Raylib.LoadMusicStreamFromMemory(Path.GetExtension(key), bytes);
+        _music[key] = (music, pin);
+        return music;
+    }
+
+    /// <summary>
     /// Release every cached asset. Call after the scene unloads but while the
     /// window and audio device are still open (textures need the GL context,
-    /// sounds need the audio device).
+    /// sounds and music need the audio device).
     /// </summary>
     public static void UnloadAll()
     {
@@ -92,5 +121,12 @@ static class Assets
         foreach (Sound snd in _sounds.Values)
             Raylib.UnloadSound(snd);
         _sounds.Clear();
+
+        foreach ((Music music, GCHandle pin) in _music.Values)
+        {
+            Raylib.UnloadMusicStream(music);
+            if (pin.IsAllocated) pin.Free();
+        }
+        _music.Clear();
     }
 }

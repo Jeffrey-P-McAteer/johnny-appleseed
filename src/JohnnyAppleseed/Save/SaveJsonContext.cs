@@ -16,6 +16,7 @@ namespace JohnnyAppleseed.Save;
     // Emit nulls too so the on-disk shape is stable and easy to hand-edit.
     DefaultIgnoreCondition = JsonIgnoreCondition.Never)]
 [JsonSerializable(typeof(SaveData))]
+[JsonSerializable(typeof(WorldState))]
 internal partial class SaveJsonContext : JsonSerializerContext
 {
 }

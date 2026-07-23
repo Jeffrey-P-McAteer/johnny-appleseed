@@ -137,15 +137,9 @@ sealed class MainMenuScene : IScene
         _             => null,
     };
 
-    // Resume the intro at the saved page when a save exists and the intro is not
-    // yet finished; otherwise begin from the first page.
-    private IScene StartOrResume()
-    {
-        int startPage = (_save != null && !_save.Story.IntroComplete)
-            ? _save.Story.IntroStep
-            : 0;
-        return new IntroScene(startPage);
-    }
+    // Enter the ink-driven story. StoryScene resumes from the saved ink state when
+    // one exists and the intro isn't finished; otherwise it starts fresh.
+    private IScene StartOrResume() => new StoryScene();
 
     private IScene? ToggleFullscreen()
     {
@@ -155,8 +149,9 @@ sealed class MainMenuScene : IScene
 
     private string LabelFor(int i) => i switch
     {
-        // Reflect saved progress: mid-intro saves resume via "CONTINUE".
-        IdxPlay       => (_save != null && !_save.Story.IntroComplete && _save.Story.IntroStep > 0)
+        // Reflect saved progress: an in-progress story resumes via "CONTINUE".
+        IdxPlay       => (_save != null && !_save.Story.IntroComplete
+                          && !string.IsNullOrEmpty(_save.World.InkState))
                              ? "CONTINUE"
                              : "PLAY",
         IdxFullscreen => _isFullscreen ? "WINDOWED" : "FULLSCREEN",

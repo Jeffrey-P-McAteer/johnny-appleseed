@@ -48,6 +48,16 @@ sealed class SaveData
     public PlayerState Player { get; set; } = new();
 
     /// <summary>
+    /// General branching-narrative state: story flags, numeric variables,
+    /// inventory, and visited nodes. Purely additive — old saves simply lack the
+    /// "world" member and deserialize to an empty <see cref="WorldState"/>, so no
+    /// format-version bump is required. See <see cref="Narrative.GameState"/> for
+    /// the ergonomic accessor scenes should use.
+    /// </summary>
+    [JsonPropertyName("world")]
+    public WorldState World { get; set; } = new();
+
+    /// <summary>
     /// Any JSON members not mapped to a property above — preserved verbatim so a
     /// newer save opened (and re-saved) by an older build keeps its extra data.
     /// </summary>
@@ -89,4 +99,39 @@ sealed class PlayerState
 {
     [JsonPropertyName("name")]
     public string Name { get; set; } = "Johnny";
+}
+
+/// <summary>
+/// The mutable world/progression state a branching story reads and writes:
+/// boolean <see cref="Flags"/>, numeric <see cref="Vars"/> (counters, minigame
+/// scores, relationship values), <see cref="Inventory"/> (item id → count), and
+/// the set of <see cref="Visited"/> node ids. Every collection defaults to empty
+/// so a save that predates a given field still loads cleanly.
+///
+/// When the Ink runtime lands (Phase 1) its serialized state string is stored in
+/// <see cref="InkState"/> and becomes the source of truth for narrative
+/// variables; these typed collections remain the interchange the C# side
+/// (minigames, HUD, the future map) reads and writes.
+/// </summary>
+sealed class WorldState
+{
+    [JsonPropertyName("flags")]
+    public Dictionary<string, bool> Flags { get; set; } = new();
+
+    [JsonPropertyName("vars")]
+    public Dictionary<string, double> Vars { get; set; } = new();
+
+    [JsonPropertyName("inventory")]
+    public Dictionary<string, int> Inventory { get; set; } = new();
+
+    [JsonPropertyName("visited")]
+    public List<string> Visited { get; set; } = new();
+
+    /// <summary>Id of the story node to resume on (supersedes the intro's raw page index in Phase 1).</summary>
+    [JsonPropertyName("currentNode")]
+    public string CurrentNode { get; set; } = "";
+
+    /// <summary>Ink runtime's serialized state (Phase 1). Null until Ink is wired in.</summary>
+    [JsonPropertyName("inkState")]
+    public string? InkState { get; set; }
 }

@@ -55,6 +55,23 @@ seen this codebase.
 - **X11 development headers** — only needed for the `linux-arm64` cross-compile
   and the native-Wayland build; not required to run or package for `linux-x64`
 
+### First: provision vendored dependencies
+
+The game uses inkle's [ink](https://www.inklestudios.com/ink/) narrative engine,
+which isn't on NuGet in a usable form. Rather than commit its source, we fetch and
+build our own copy into the gitignored `build/` tree (mirroring how
+`setup-native-libs.py` provisions native libraries):
+
+```bash
+uv run scripts/setup-vendor-libs.py        # fetch + build all vendored deps (ink)
+```
+
+Run this once after cloning (and again to pick up a newer ink release with
+`--rebuild`). If you skip it, the build stops with a message telling you to run
+it. The built DLLs are referenced by `HintPath` and bundled into the single-file
+publish. Managed deps like ink are platform-agnostic — one build serves every
+target.
+
 ### Run it
 
 ```bash

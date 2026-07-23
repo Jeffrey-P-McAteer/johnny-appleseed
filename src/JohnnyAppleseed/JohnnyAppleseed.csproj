@@ -46,6 +46,37 @@
   </ItemGroup>
 
   <!--
+    inkle's ink — the branching-narrative engine (Ink.Runtime.Story) + compiler
+    (Ink.Compiler, compiles authored .ink at runtime so writers' raw .ink ships and
+    can hot-reload). Both MIT, netstandard2.0. inkle publishes no usable NuGet, so
+    rather than commit their source we fetch + build it with a script (mirroring
+    how setup-native-libs.py provisions native libs). The built DLLs live in the
+    gitignored build/vendor/ink/ and are referenced by HintPath (Private=true →
+    copied to output → bundled into the single-file publish).
+
+        uv run scripts/setup-vendor-libs.py ink
+  -->
+  <PropertyGroup>
+    <InkLibDir>$(MSBuildThisFileDirectory)..\..\build\vendor\ink</InkLibDir>
+  </PropertyGroup>
+
+  <Target Name="RequireInkVendored" BeforeTargets="ResolveAssemblyReferences"
+          Condition="!Exists('$(InkLibDir)\ink_compiler.dll')">
+    <Error Text="ink dependency is not provisioned. Run:  uv run scripts/setup-vendor-libs.py ink  (fetches + builds inkle/ink into build/vendor/ink/)." />
+  </Target>
+
+  <ItemGroup Condition="Exists('$(InkLibDir)\ink_compiler.dll')">
+    <Reference Include="ink-engine-runtime">
+      <HintPath>$(InkLibDir)\ink-engine-runtime.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="ink_compiler">
+      <HintPath>$(InkLibDir)\ink_compiler.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!--
     ══════════════════════════════════════════════════════════════════════════
     Game assets — embedded into the assembly
     ══════════════════════════════════════════════════════════════════════════
@@ -66,6 +97,17 @@
     <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\graphics\**\*"
                       Condition="Exists('$(MSBuildThisFileDirectory)..\..\graphics')"
                       LogicalName="graphics/%(RecursiveDir)%(Filename)%(Extension)" />
+    <!--
+      Authored narrative content, read at runtime via Assets by the key "story/…":
+      item/character definitions (*.jsonc — comments allowed) and the ink stories
+      themselves (*.ink, compiled at runtime by Ink.Compiler). Writer docs
+      (README.md) are intentionally NOT embedded.
+    -->
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\story\**\*.jsonc;$(MSBuildThisFileDirectory)..\..\story\**\*.ink"
+                      Condition="Exists('$(MSBuildThisFileDirectory)..\..\story')"
+                      LogicalName="story/%(RecursiveDir)%(Filename)%(Extension)" />
+    <!-- Empty-folder placeholders are for repo structure only; never embed them. -->
+    <EmbeddedResource Remove="$(MSBuildThisFileDirectory)..\..\audio\**\.gitkeep;$(MSBuildThisFileDirectory)..\..\graphics\**\.gitkeep" />
   </ItemGroup>
 
   <!-- Let the debug hardware-probe reuse internal classes (InputSystem, AppData,

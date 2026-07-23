@@ -1,0 +1,44 @@
+// ─────────────────────────────────────────────────────────────────────────────
+//  ITEM DEFINITIONS
+//
+//  This is JSONC — plain JSON, except  // line  and  /* block */  comments and
+//  trailing commas are allowed and ignored. Leave yourself notes freely.
+//
+//  Every item is defined ONCE here and shared by every view: the face-to-face
+//  story scene today, and the RPG-style map/codex later. The story (.ink) files
+//  refer to an item by its "id" (give / take / has), so keep ids stable and in
+//  lowercase-with-dashes.
+//
+//  Fields:
+//    id          required, unique. How the story and code reference the item.
+//    name        display name.
+//    description plain tooltip/codex text.
+//    greentext   optional flavor/quote lines, shown in green (the classic ">"
+//                style). Cosmetic; write as many lines as you like.
+//    icon        embedded texture key (add the art under graphics/ui/items/).
+//    stackable   true if copies combine into one count (default true).
+// ─────────────────────────────────────────────────────────────────────────────
+[
+  {
+    "id": "apple-seeds",
+    "name": "Apple Seeds",
+    "description": "A handful of pale seeds, saved from last autumn's press.",
+    "greentext": [
+      "> smells faintly of cider",
+      "> the beginning of a thousand orchards"
+    ],
+    "icon": "graphics/ui/items/apple-seeds.png",
+    "stackable": true
+  },
+
+  {
+    "id": "axe",
+    "name": "Felling Axe",
+    "description": "Well-balanced, its edge kept keen for clearing deadfall.",
+    "greentext": [ "> heavier than it looks" ],
+    "icon": "graphics/ui/items/axe.png",
+    "stackable": false
+  },
+
+  // TODO(writer): tin cup, seedling sack, letter from home, …
+]

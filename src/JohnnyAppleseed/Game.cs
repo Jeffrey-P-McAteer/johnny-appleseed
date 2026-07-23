@@ -1,6 +1,8 @@
 using Raylib_cs;
+using JohnnyAppleseed.Audio;
 using JohnnyAppleseed.Input;
 using JohnnyAppleseed.Platform;
+using JohnnyAppleseed.Save;
 using JohnnyAppleseed.Scenes;
 
 namespace JohnnyAppleseed;
@@ -20,6 +22,10 @@ static class Game
             $"@ {BuildInfo.GitHash}");
 
         AppData.Initialize();
+
+        // Tell the user where their save/progress lives, so they can find (or back
+        // up) it without digging through platform-specific app-data folders.
+        Console.Error.WriteLine($"[johnny-appleseed] save data: {SaveSystem.SavePath}");
 
         // On Linux: detect display server and guide GLFW's backend selection
         // BEFORE InitWindow — once GLFW initialises the choice is locked in.
@@ -62,6 +68,10 @@ static class Game
 
             // Must be first: captures axis edges before any scene logic runs.
             InputSystem.Update();
+
+            // Advance any streamed background music (loop/cross-fade). No-op until
+            // a scene calls MusicManager.Play.
+            MusicManager.Update(dt);
 
             IScene? next = scene.Update(dt);
 

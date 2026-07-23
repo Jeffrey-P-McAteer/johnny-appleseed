@@ -1,0 +1,30 @@
+// ─────────────────────────────────────────────────────────────────────────────
+//  CHARACTER DEFINITIONS   (JSONC — // and /* */ comments are allowed)
+//
+//  Defined once, shared by the story scene (portrait + name colour) and the
+//  future map/codex (the same "description"). Story files reference a speaker by
+//  "id".
+//
+//  Fields:
+//    id           required, unique (lowercase-with-dashes).
+//    name         display name.
+//    description  shared biographical/codex text.
+//    portrait     embedded texture key (add art under graphics/portraits/).
+//    textColor    optional "#RRGGBB" for the speaker's name/dialogue tint.
+// ─────────────────────────────────────────────────────────────────────────────
+[
+  {
+    "id": "johnny",
+    "name": "John Chapman",
+    "description": "A barefoot wanderer who plants orchards ahead of the settlers, so fruit is waiting when they arrive.",
+    "portrait": "graphics/portraits/johnny.png",
+    "textColor": "#FFD250"   // warm apple-gold, matches the UI accent
+  },
+
+  {
+    "id": "settler",
+    "name": "Weary Settler",
+    "description": "One of many pushing west with everything they own lashed to a cart.",
+    "portrait": "graphics/portraits/settler.png"
+  },
+]

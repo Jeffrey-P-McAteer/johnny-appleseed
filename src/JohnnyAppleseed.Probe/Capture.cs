@@ -26,6 +26,7 @@ static class Capture
         IScene s = scene switch
         {
             "menu"  => new MainMenuScene(),
+            "story" => new StoryScene(),
             _        => new IntroScene(),
         };
         s.Load();

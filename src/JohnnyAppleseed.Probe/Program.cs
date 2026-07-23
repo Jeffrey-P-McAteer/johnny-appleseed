@@ -17,6 +17,8 @@ namespace JohnnyAppleseed.Probe;
 ///   raw [dev]           Read raw Linux joystick events straight from the kernel
 ///                       (default /dev/input/js0), bypassing raylib entirely.
 ///   assets              List the assets embedded in the game binary.
+///   content             Dump the parsed item/character content DB + a GameState
+///                       round-trip (headless). Exit 0 = parsed & consistent.
 ///   capture [menu|intro] [seconds] [out.png]
 ///                       Render a scene headlessly and write a PNG screenshot.
 ///   selftest [save|input]
@@ -39,6 +41,8 @@ static class Program
             "raw" or "js"   => RawJoystick.Run(args.Length > 1 ? args[1] : "/dev/input/js0"),
             "probe" or ""   => GamepadProbe.Interactive(),
             "assets"        => AssetProbe.List(),
+            "content"       => ContentProbe.Run(),
+            "ink"           => InkProbe.Run(),
             "capture"       => RunCapture(args),
             "selftest"      => RunSelfTest(args),
             _               => Usage(mode),
@@ -49,9 +53,9 @@ static class Program
     private static int RunCapture(string[] args)
     {
         string scene   = args.Length > 1 ? args[1].ToLowerInvariant() : "menu";
-        if (scene is not ("menu" or "intro"))
+        if (scene is not ("menu" or "intro" or "story"))
         {
-            Console.Error.WriteLine($"unknown scene '{scene}'. valid: menu | intro");
+            Console.Error.WriteLine($"unknown scene '{scene}'. valid: menu | intro | story");
             return 2;
         }
         float  seconds = args.Length > 2 && float.TryParse(args[2], out float s) ? s : 1.2f;
@@ -59,21 +63,23 @@ static class Program
         return Capture.Run(scene, seconds, outPath);
     }
 
-    // selftest [save|input]  → default runs both, ORs their exit codes.
+    // selftest [save|input|story]  → default runs all, ORs their exit codes.
     private static int RunSelfTest(string[] args)
     {
         string? which = args.Length > 1 ? args[1].ToLowerInvariant() : null;
         bool save  = which is null or "save";
         bool input = which is null or "input";
-        if (!save && !input)
+        bool story = which is null or "story";
+        if (!save && !input && !story)
         {
-            Console.Error.WriteLine($"unknown suite '{which}'. valid: save | input (default: both)");
+            Console.Error.WriteLine($"unknown suite '{which}'. valid: save | input | story (default: all)");
             return 2;
         }
 
         int rc = 0;
         if (save)  rc |= SaveSelfTest.Run();
         if (input) rc |= InputSelfTest.Run();
+        if (story) rc |= StorySelfTest.Run();
         return rc;
     }
 
@@ -81,7 +87,7 @@ static class Program
     {
         Console.Error.WriteLine(
             $"unknown mode '{bad}'. valid: probe (default) | list | raw [device] | " +
-            "assets | capture [menu|intro] [secs] [out.png] | selftest [save|input]");
+            "assets | content | capture [menu|intro] [secs] [out.png] | selftest [save|input]");
         return 2;
     }
 }
