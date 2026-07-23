@@ -138,9 +138,22 @@ def build_project(src_root: Path, project: str) -> None:
     if not proj.exists():
         die(f"build project not found: {proj}")
     print(f"  dotnet build {project} -c Release")
+
+    # Make each build HERMETIC so `--rebuild` is reliably idempotent. The source
+    # tree is wiped and re-extracted every run, but .NET keeps persistent build
+    # servers (MSBuild nodes + the Roslyn VBCSCompiler) alive between invocations;
+    # re-extracting pristine sources into the same paths (with the tarball's
+    # backdated timestamps) could make those servers reuse stale state from a
+    # prior run and compile the SDK-generated AssemblyInfo without its framework
+    # references ("System could not be found"). Disabling the shared servers for
+    # this build forces a clean, deterministic compile every time.
+    env = os.environ.copy()
+    env["MSBUILDDISABLENODEREUSE"] = "1"     # no lingering MSBuild worker nodes
     result = subprocess.run(
-        ["dotnet", "build", str(proj), "-c", "Release", "--nologo", "-v", "quiet"],
-        cwd=src_root)
+        ["dotnet", "build", str(proj), "-c", "Release", "--nologo", "-v", "quiet",
+         "--disable-build-servers",          # ignore any persistent build servers
+         "-p:UseSharedCompilation=false"],   # spawn a fresh compiler, don't reuse one
+        cwd=src_root, env=env)
     if result.returncode != 0:
         die(f"`dotnet build {project}` failed with code {result.returncode}")
 
