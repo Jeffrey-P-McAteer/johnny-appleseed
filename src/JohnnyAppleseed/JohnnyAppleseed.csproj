@@ -106,8 +106,11 @@
     <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\story\**\*.jsonc;$(MSBuildThisFileDirectory)..\..\story\**\*.ink"
                       Condition="Exists('$(MSBuildThisFileDirectory)..\..\story')"
                       LogicalName="story/%(RecursiveDir)%(Filename)%(Extension)" />
-    <!-- Empty-folder placeholders are for repo structure only; never embed them. -->
-    <EmbeddedResource Remove="$(MSBuildThisFileDirectory)..\..\audio\**\.gitkeep;$(MSBuildThisFileDirectory)..\..\graphics\**\.gitkeep" />
+    <!-- Empty-folder placeholders are for repo structure only; never embed them.
+         Raw *.aseprite sources aren't shipped either: the GenerateAsepriteArt
+         target below rasterises them to graphics/<name>.png/.gif (into obj/) and
+         embeds those instead — the game can't read the .aseprite format. -->
+    <EmbeddedResource Remove="$(MSBuildThisFileDirectory)..\..\audio\**\.gitkeep;$(MSBuildThisFileDirectory)..\..\graphics\**\.gitkeep;$(MSBuildThisFileDirectory)..\..\graphics\**\*.aseprite" />
   </ItemGroup>
 
   <!-- Let the debug hardware-probe reuse internal classes (InputSystem, AppData,
@@ -261,6 +264,55 @@
     <PropertyGroup Condition="Exists('$(_IconIco)')">
       <ApplicationIcon>$(_IconIco)</ApplicationIcon>
     </PropertyGroup>
+  </Target>
+
+  <!--
+    ══════════════════════════════════════════════════════════════════════════
+    Aseprite art  →  embedded PNG / GIF
+    ══════════════════════════════════════════════════════════════════════════
+    Rasterises every graphics/**/*.aseprite into obj/aseprite/ (gitignored) and
+    embeds the results under the key "graphics/<name>.png" / ".gif". Frame count
+    decides the outputs (scripts/aseprite-export.py): 1 frame → PNG + GIF, many
+    frames → GIF only. The raw .aseprite is not shipped (Removed from the embed
+    glob above); the game can't read that format anyway.
+
+    Same BeforeTargets timing rationale as GenerateIcons: the EmbeddedResource
+    items must be added before AssignTargetPaths so their LogicalName flows through
+    resource naming. Best-effort: the export needs the Aseprite binary that
+    scripts/run-aseprite.py builds under build/aseprite/. If it isn't built the
+    exporter prints a notice and exits 0 (IgnoreExitCode), so `dotnet build` never
+    blocks on a from-source Aseprite compile — provision it once by running
+    scripts/run-aseprite.py in no-run mode.
+  -->
+  <Target Name="GenerateAsepriteArt" BeforeTargets="AssignTargetPaths;CoreCompile">
+    <PropertyGroup>
+      <_GfxDir>$(MSBuildThisFileDirectory)..\..\graphics</_GfxDir>
+      <_AseScript>$(MSBuildThisFileDirectory)..\..\scripts\aseprite-export.py</_AseScript>
+      <_AseArtDir>$(IntermediateOutputPath)aseprite</_AseArtDir>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_AseSrc Include="$(_GfxDir)\**\*.aseprite" />
+    </ItemGroup>
+
+    <MakeDir Directories="$(_AseArtDir)" Condition="'@(_AseSrc)' != ''" />
+
+    <Exec Command="uv run &quot;$(_AseScript)&quot; --graphics-dir &quot;$(_GfxDir)&quot; --outdir &quot;$(_AseArtDir)&quot;"
+          Condition="'@(_AseSrc)' != '' And Exists('$(_AseScript)')"
+          IgnoreExitCode="true"
+          StandardOutputImportance="low"
+          StandardErrorImportance="low" />
+
+    <!-- Embed whatever was produced (mirrors the graphics/ subtree via RecursiveDir).
+         Stage into a private item type first, then reference *qualified* metadata
+         (%(_AsepriteArt.*)). Using bare %(RecursiveDir)/%(Filename) in a target-level
+         EmbeddedResource batches over the EXISTING EmbeddedResource items instead of
+         these, cross-producing every wrong LogicalName (→ CS1508 collisions). -->
+    <ItemGroup Condition="Exists('$(_AseArtDir)')">
+      <_AsepriteArt Include="$(_AseArtDir)\**\*.png;$(_AseArtDir)\**\*.gif" />
+      <EmbeddedResource Include="@(_AsepriteArt)"
+                        LogicalName="graphics/%(_AsepriteArt.RecursiveDir)%(_AsepriteArt.Filename)%(_AsepriteArt.Extension)" />
+    </ItemGroup>
   </Target>
 
   <!--
