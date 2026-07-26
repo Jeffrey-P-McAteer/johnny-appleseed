@@ -108,7 +108,7 @@ def ovmf_to_qemu_args(code_path: str):
     # Heuristic: if we have a VARS file use pflash mode (preferred)
     if vars_path:
         # Assume the vars file is immutable, copy to OS dir and send the modifiable copy to our args.
-        os_temp_dir_vars_file = os.path.join(tempfile.gettempdir(), 'av-switchyard-testbed-MA3-'+os.path.basename(vars_path))
+        os_temp_dir_vars_file = os.path.join(tempfile.gettempdir(), 'testbed-windows-'+os.path.basename(vars_path))
         if not os.path.exists(os_temp_dir_vars_file):
           shutil.copy(vars_path, os_temp_dir_vars_file)
         args += [
