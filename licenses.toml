@@ -1,0 +1,15 @@
+
+# This file exists to embed authorship and licensing data for
+# all asset files the game uses. It also allows developers to
+# rapidly identify new un-licensed or unattributed art via the
+# ./scripts/media-licensing-report.py
+# script.
+
+[[license]]
+file = 'very-poorly-drawn-character-designed-in-aseprite.aseprite'
+license_spdx_id = 'GPL-2.0'
+license_file = '/dev/null' # TODO someday we will need to keep actual copies of the relevant license text in here, this will point to the correct license file path.
+author = 'Jeffrey McAteer'
+
+
+
