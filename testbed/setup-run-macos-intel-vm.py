@@ -326,6 +326,7 @@ if not os.path.exists(vm_is_installed_flag_file):
       '-drive',   f'id=OpenCore,if=ide,format=vmdk,file={opencore_boot_image}',
       '-drive',   f'file={vm_qcow2},format=qcow2,if=ide',
       '-cdrom',   f'{install_iso}',
+      '-device',  'ide-hd,drive=OpenCore,bootindex=1',
       '-boot',    'order=d,menu=on', # prefer cd drive as boot target
 # NO INTERNET FOR YOU! - forces local account setups
       '-nic', 'none',
@@ -386,6 +387,7 @@ try:
       *ovmf_to_qemu_args(ovmf_code_fd_file),
       '-drive',   f'id=OpenCore,if=ide,format=vmdk,file={opencore_boot_image}',
       '-drive',   f'file={vm_qcow2},format=qcow2,if=ide',
+      '-device',  'ide-hd,drive=OpenCore,bootindex=1',
       '-netdev',  'user,id=net0',
       '-device',  'e1000,netdev=net0',
       '-device',  'qemu-xhci',
