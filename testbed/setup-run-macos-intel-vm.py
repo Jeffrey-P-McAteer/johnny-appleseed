@@ -248,10 +248,10 @@ and place it under the folder {vm_data_folder}
 )
 
 opencore_boot_image = glob_for_nonempty_file_fatal(
-  vm_data_folder, '*.Intel.vmdk',
+  vm_data_folder, '[oO]pen[cC]ore.qcow2',
   f'''
 Please download a macOS OpenCore boot image from
- - https://techrechard.com/download-macos-tahoe-opencore-boot-image-vmdk/
+ - https://github.com/kholia/OSX-KVM/blob/master/OpenCore/OpenCore.qcow2
 and place it under the folder {vm_data_folder}
 '''
 )
@@ -320,23 +320,33 @@ if not os.path.exists(vm_is_installed_flag_file):
       '-m',       '8192',
       '-smp',     '4',
       #'-cpu',     'host',
-      '-cpu',     'Penryn,kvm=on,vendor=GenuineIntel,+sse4.2,+sse4.1,+avx,+aes',
+      '-cpu',     'host,kvm=on,vendor=GenuineIntel',
       '-machine', 'q35',
       '-device',  f'isa-applesmc,osk={macos_osk_string}',
       *ovmf_to_qemu_args(ovmf_code_fd_file),
-      '-drive',   f'id=OpenCore,if=none,format=vmdk,file={opencore_boot_image}', # if=ide
-      '-device',  'ide-hd,drive=OpenCore,bootindex=1',
-      '-drive',   f'file={vm_qcow2},format=qcow2,if=ide',
-      '-cdrom',   f'{install_iso}',
-      '-boot',    'order=d,menu=on', # prefer cd drive as boot target
+
+      '-device', 'ich9-ahci,id=sata',
+
+      '-drive',   f'id=OpenCore,if=none,format=qcow2,file={opencore_boot_image}',
+      '-device',  'ide-hd,bus=sata.0,drive=OpenCore,bootindex=2',
+
+      '-drive',   f'id=MacOS,file={vm_qcow2},format=qcow2,if=none',
+      '-device',  'ide-hd,bus=sata.1,drive=MacOS',
+
+      '-drive',   f'if=none,id=InstallMedia,format=raw,media=cdrom,file={install_iso}',
+      '-device',  'ide-cd,bus=sata.2,drive=InstallMedia,bootindex=1',
+      #'-cdrom',   f'{install_iso}',
+
+      '-boot',    'menu=on',
 # NO INTERNET FOR YOU! - forces local account setups
       '-nic', 'none',
 #      '-netdev',  'user,id=net0',
 #      '-device',  'e1000,netdev=net0',
       '-device',  'qemu-xhci',
       '-device',  'usb-tablet',
-      '-vga',     'std',
-      '-display', 'gtk',
+      '-device',  'VGA,vgamem_mb=64',
+      '-display', 'gtk,gl=on',
+
   cwd=vm_data_folder)
 
   os_was_installed = ask_user_yn_question(f'Did OS install complete to your satisfaction? ')
@@ -386,7 +396,7 @@ try:
       '-machine', 'q35',
       '-device',  f'isa-applesmc,osk={macos_osk_string}',
       *ovmf_to_qemu_args(ovmf_code_fd_file),
-      '-drive',   f'id=OpenCore,if=none,format=vmdk,file={opencore_boot_image}', # if=ide
+      '-drive',   f'id=OpenCore,if=none,format=qcow2,file={opencore_boot_image}', # if=ide
       '-device',  'ide-hd,drive=OpenCore,bootindex=1',
       '-drive',   f'file={vm_qcow2},format=qcow2,if=ide',
       '-netdev',  'user,id=net0',
