@@ -12,4 +12,9 @@ license_file = '/dev/null' # TODO someday we will need to keep actual copies of 
 author = 'Jeffrey McAteer'
 
 
+[[license]]
+file = 'stone_rock_or_wood_moved_no_tick.mp3'
+license_spdx_id = ' CC0-1.0'
+author = 'omegagreg'
+source = 'https://opengameart.org/content/stonerockorwoodmovednotick'
 
