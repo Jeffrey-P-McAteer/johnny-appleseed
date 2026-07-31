@@ -6,11 +6,11 @@
 # ]
 # ///
 """
-Johnny Appleseed — Aseprite build-and-launch wrapper.
+Johnny Appleseed - Aseprite build-and-launch wrapper.
 
 Aseprite (the pixel-art / sprite-animation editor we author game art in) ships no
 free Linux binary, so this downloads its source + the matching prebuilt Skia,
-compiles it under ./build/ (gitignored), and launches the built binary — then on
+compiles it under ./build/ (gitignored), and launches the built binary - then on
 every subsequent run skips straight to launching it.
 
 Like scripts/probe.py, this doubles as a *binary intermediary*: any argument it
@@ -31,16 +31,16 @@ Our own flags (parsed and consumed before forwarding):
     -j / --jobs N        ninja parallel job count (default: all cores)
     --                   everything after this is forwarded to aseprite verbatim
 
-Steps are individually resumable — each checks for its own output and is skipped
+Steps are individually resumable - each checks for its own output and is skipped
 if already present, so an interrupted build continues where it left off, and a
 fully-built tree launches with NO network access at all:
 
-    1. source   download the latest Aseprite release Source.zip → build/aseprite/src
-    2. skia     download the matching prebuilt Skia (x64 only) → build/aseprite/skia
-    3. compile  cmake + ninja                                  → build/aseprite/build/bin/aseprite
+    1. source   download the latest Aseprite release Source.zip -> build/aseprite/src
+    2. skia     download the matching prebuilt Skia (x64 only) -> build/aseprite/skia
+    3. compile  cmake + ninja                                  -> build/aseprite/build/bin/aseprite
     4. launch   exec the binary, forwarding arguments
 
-System requirements (this script cannot install them — they need root):
+System requirements (this script cannot install them - they need root):
     A C++ toolchain + build tools. clang is preferred (the officially-supported
     Linux path); g++ is used as a fallback. Plus cmake, ninja, and X11/GL/
     fontconfig headers. If any are missing, the script prints the exact package
@@ -67,7 +67,7 @@ from pathlib import Path
 
 import requests
 
-# ── paths ────────────────────────────────────────────────────────────────────
+# -- paths --------------------------------------------------------------------
 REPO_ROOT     = Path(__file__).resolve().parent.parent
 BUILD_DIR     = REPO_ROOT / "build"
 CACHE_DIR     = BUILD_DIR / "cache"            # shared with the other setup scripts
@@ -81,14 +81,14 @@ ASEPRITE_REPO = "aseprite/aseprite"
 SKIA_REPO     = "aseprite/skia"
 
 # Pin Skia here (a release tag like "m124-abcdef") only if latest-vs-latest ever
-# breaks; None → auto-resolve the latest Skia release. Env var wins if set.
+# breaks; None -> auto-resolve the latest Skia release. Env var wins if set.
 SKIA_RELEASE: str | None = os.environ.get("ASEPRITE_SKIA_RELEASE") or None
 
 GITHUB_LATEST  = "https://api.github.com/repos/{repo}/releases/latest"
 GITHUB_BY_TAG  = "https://api.github.com/repos/{repo}/releases/tags/{tag}"
 
-# distro-id → the package-install command that provides Aseprite's build deps.
-# (from aseprite/INSTALL.md; this script only *prints* these — installing needs root.)
+# distro-id -> the package-install command that provides Aseprite's build deps.
+# (from aseprite/INSTALL.md; this script only *prints* these - installing needs root.)
 DISTRO_PACKAGES = {
     "arch":   "sudo pacman -S --needed gcc clang cmake ninja unzip libx11 libxcursor "
               "libxi libxrandr mesa fontconfig libwebp",
@@ -102,14 +102,14 @@ DISTRO_PACKAGES = {
 }
 
 
-# ── helpers ──────────────────────────────────────────────────────────────────
+# -- helpers ------------------------------------------------------------------
 def die(msg: str) -> None:
     print(f"ERROR: {msg}", file=sys.stderr)
     sys.exit(1)
 
 
 def hr(label: str) -> None:
-    print(f"── {label} " + "─" * max(1, 60 - len(label)))
+    print(f"-- {label} " + "-" * max(1, 60 - len(label)))
 
 
 def arch_token() -> str:
@@ -123,7 +123,7 @@ def arch_token() -> str:
 
 
 def distro_id() -> str:
-    """Best-effort /etc/os-release ID → one of DISTRO_PACKAGES keys (or '')."""
+    """Best-effort /etc/os-release ID -> one of DISTRO_PACKAGES keys (or '')."""
     try:
         fields = dict(
             line.split("=", 1)
@@ -141,7 +141,7 @@ def distro_id() -> str:
 
 def release_json(repo: str, tag: str | None) -> dict:
     url = GITHUB_BY_TAG.format(repo=repo, tag=tag) if tag else GITHUB_LATEST.format(repo=repo)
-    print(f"  querying GitHub for {repo} {tag or 'latest'} release …")
+    print(f"  querying GitHub for {repo} {tag or 'latest'} release ...")
     r = requests.get(url, timeout=30, headers={"Accept": "application/vnd.github.v3+json"})
     r.raise_for_status()
     return r.json()
@@ -164,14 +164,14 @@ def download(url: str, dest: Path, desc: str) -> Path:
     if dest.exists() and dest.stat().st_size > 0:
         print(f"  cached: {dest.name}  ({dest.stat().st_size // (1024*1024)} MB)")
         return dest
-    print(f"  downloading {desc} …")
+    print(f"  downloading {desc} ...")
     tmp = dest.with_suffix(dest.suffix + ".part")
     with requests.get(url, stream=True, timeout=600) as r:
         r.raise_for_status()
         with open(tmp, "wb") as f:
             for chunk in r.iter_content(1 << 20):
                 f.write(chunk)
-    tmp.replace(dest)  # atomic → a killed download never looks "cached"
+    tmp.replace(dest)  # atomic -> a killed download never looks "cached"
     print(f"  downloaded {dest.stat().st_size // (1024*1024)} MB")
     return dest
 
@@ -199,13 +199,13 @@ def find_dir_containing(root: Path, needle: str) -> Path:
     die(f"could not find '{needle}' under {root} after extraction")
 
 
-# ── build tooling checks ─────────────────────────────────────────────────────
+# -- build tooling checks -----------------------------------------------------
 def pick_compiler() -> tuple[str, str, bool]:
     """Return (cc, cxx, is_clang). Prefer clang (official Linux path), else gcc."""
     if shutil.which("clang") and shutil.which("clang++"):
         return "clang", "clang++", True
     if shutil.which("gcc") and shutil.which("g++"):
-        print("  note: clang not found — falling back to gcc (also builds fine with libstdc++ Skia)")
+        print("  note: clang not found - falling back to gcc (also builds fine with libstdc++ Skia)")
         return "gcc", "g++", False
     return "", "", False
 
@@ -228,7 +228,7 @@ def check_tools() -> tuple[str, str, bool]:
     return cc, cxx, is_clang
 
 
-# ── steps ────────────────────────────────────────────────────────────────────
+# -- steps --------------------------------------------------------------------
 def ensure_source(rebuild: bool) -> None:
     """Download + extract the latest Aseprite release Source.zip into SRC_DIR."""
     rel = release_json(ASEPRITE_REPO, None)
@@ -240,7 +240,7 @@ def ensure_source(rebuild: bool) -> None:
     name, url = pick_asset(rel, ["source", ".zip"])
     archive = download(url, CACHE_DIR / name, f"Aseprite {tag} source")
 
-    print(f"  extracting {name} …")
+    print(f"  extracting {name} ...")
     staging = ASEPRITE_DIR / "_src_staging"
     extract_zip(archive, staging)
     root = find_dir_containing(staging, "CMakeLists.txt")
@@ -249,7 +249,7 @@ def ensure_source(rebuild: bool) -> None:
     root.replace(SRC_DIR)
     shutil.rmtree(staging, ignore_errors=True)
     SRC_STAMP.write_text(tag + "\n")
-    print(f"  ✓ source: {SRC_DIR.relative_to(REPO_ROOT)}  (Aseprite {tag})")
+    print(f"  OK source: {SRC_DIR.relative_to(REPO_ROOT)}  (Aseprite {tag})")
 
 
 def ensure_skia(rebuild: bool) -> Path:
@@ -262,7 +262,7 @@ def ensure_skia(rebuild: bool) -> Path:
 
     if arch != "x64":
         die("aseprite/skia ships no prebuilt Linux-arm64 Skia (only x64/x86). "
-            "You'd have to compile Skia yourself — see "
+            "You'd have to compile Skia yourself - see "
             "https://github.com/aseprite/aseprite/blob/main/INSTALL.md#skia-on-linux")
 
     rel = release_json(SKIA_REPO, SKIA_RELEASE)
@@ -271,17 +271,17 @@ def ensure_skia(rebuild: bool) -> Path:
     name, url = pick_asset(rel, ["linux", "release", arch, ".zip"])
     archive = download(url, CACHE_DIR / name, f"Skia {rel['tag_name']} ({arch})")
 
-    print(f"  extracting {name} …")
+    print(f"  extracting {name} ...")
     extract_zip(archive, SKIA_DIR)
     if not (lib_dir / "libskia.a").exists():
-        # Some Skia zips wrap everything in a top dir — relocate to SKIA_DIR root.
+        # Some Skia zips wrap everything in a top dir - relocate to SKIA_DIR root.
         inner = find_dir_containing(SKIA_DIR, "out")
         if inner != SKIA_DIR:
             for child in inner.iterdir():
                 child.replace(SKIA_DIR / child.name)
     if not (lib_dir / "libskia.a").exists():
         die(f"libskia.a not found at {lib_dir} after extracting Skia")
-    print(f"  ✓ skia: {SKIA_DIR.relative_to(REPO_ROOT)}  ({rel['tag_name']})")
+    print(f"  OK skia: {SKIA_DIR.relative_to(REPO_ROOT)}  ({rel['tag_name']})")
     return lib_dir
 
 
@@ -293,7 +293,7 @@ def compile_aseprite(skia_lib_dir: Path, cc: str, cxx: str, is_clang: bool, jobs
     env["CC"], env["CXX"] = cc, cxx
 
     if not (CMAKE_BUILD / "CMakeCache.txt").exists():
-        print("  configuring (cmake) …")
+        print("  configuring (cmake) ...")
         cmake_cmd = [
             "cmake",
             "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
@@ -313,15 +313,15 @@ def compile_aseprite(skia_lib_dir: Path, cc: str, cxx: str, is_clang: bool, jobs
         if subprocess.run(cmake_cmd, cwd=CMAKE_BUILD, env=env).returncode != 0:
             die("cmake configuration failed")
     else:
-        print("  cmake already configured — skipping")
+        print("  cmake already configured - skipping")
 
-    print(f"  building (ninja -j{jobs} aseprite) — this can take a while …")
+    print(f"  building (ninja -j{jobs} aseprite) - this can take a while ...")
     if subprocess.run(["ninja", f"-j{jobs}", "aseprite"],
                       cwd=CMAKE_BUILD, env=env).returncode != 0:
         die("ninja build failed")
     if not binary.exists():
         die(f"build finished but binary missing at {binary}")
-    print(f"  ✓ built: {binary.relative_to(REPO_ROOT)}")
+    print(f"  OK built: {binary.relative_to(REPO_ROOT)}")
     return binary
 
 
@@ -329,7 +329,7 @@ def ensure_built(rebuild: bool, jobs: int) -> Path:
     """Provision + compile as needed; return the aseprite binary path."""
     binary = CMAKE_BUILD / "bin" / "aseprite"
 
-    # Fast path: already built and not forcing a rebuild → launch with zero network.
+    # Fast path: already built and not forcing a rebuild -> launch with zero network.
     if binary.exists() and not rebuild:
         return binary
 
@@ -348,7 +348,7 @@ def ensure_built(rebuild: bool, jobs: int) -> Path:
     return compile_aseprite(skia_lib_dir, cc, cxx, is_clang, jobs)
 
 
-# ── arg parsing (probe.py-style: consume our flags, forward the rest) ─────────
+# -- arg parsing (probe.py-style: consume our flags, forward the rest) ---------
 def parse_args(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
     ns = argparse.Namespace(rebuild=False, no_run=False, jobs=os.cpu_count() or 4)
     forwarded: list[str] = []
@@ -367,7 +367,7 @@ def parse_args(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
                 die(f"{arg} needs a value")
             ns.jobs = int(argv[i + 1]); i += 1
         else:
-            forwarded.append(arg)             # unknown → forward to aseprite
+            forwarded.append(arg)             # unknown -> forward to aseprite
         i += 1
     return ns, forwarded
 

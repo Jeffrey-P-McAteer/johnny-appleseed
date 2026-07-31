@@ -8,7 +8,7 @@
 # ]
 # ///
 """
-Johnny Appleseed — cross-platform packaging script.
+Johnny Appleseed - cross-platform packaging script.
 
 Usage (from repo root):
     uv run scripts/package.py                     # all targets
@@ -40,12 +40,12 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-# Pure-Python HFS+/UDIF DMG builder — no system dependencies
+# Pure-Python HFS+/UDIF DMG builder - no system dependencies
 from _dmg import build_dmg as _build_dmg_hfs
-# SVG → .icns rasteriser (shared with the MSBuild icon pipeline)
+# SVG -> .icns rasteriser (shared with the MSBuild icon pipeline)
 from _icons import write_icns
 
-# ── configuration ─────────────────────────────────────────────────────────────
+# -- configuration -------------------------------------------------------------
 
 REPO_ROOT   = Path(__file__).resolve().parent.parent
 PROJECT_CS  = REPO_ROOT / "src" / "JohnnyAppleseed" / "JohnnyAppleseed.csproj"
@@ -58,7 +58,7 @@ APP_ID        = "com.johnnyseed.game"
 APP_VERSION   = "1.0.0"
 
 
-# Map: (target_os, arch) → .NET RID
+# Map: (target_os, arch) -> .NET RID
 TARGETS: dict[tuple[str, str], str] = {
     ("windows", "x64"):   "win-x64",
     ("windows", "arm64"): "win-arm64",
@@ -68,7 +68,7 @@ TARGETS: dict[tuple[str, str], str] = {
     ("macos",   "arm64"): "osx-arm64",
 }
 
-# ── native-lib bootstrap for RIDs missing from the Raylib-cs NuGet package ───
+# -- native-lib bootstrap for RIDs missing from the Raylib-cs NuGet package ---
 
 def ensure_native_lib(target_os: str, arch: str, skip_download: bool) -> bool:
     """
@@ -101,13 +101,13 @@ def ensure_native_lib(target_os: str, arch: str, skip_download: bool) -> bool:
         )
         return False
 
-    # linux-x64, win-x64, osx-x64, osx-arm64 — bundled in the NuGet package.
+    # linux-x64, win-x64, osx-x64, osx-arm64 - bundled in the NuGet package.
     # setup-native-libs.py linux-wayland may replace linux-x64's lib with the
     # Wayland-capable version; that's handled by the OverrideWaylandLib MSBuild target.
     return True
 
 
-# ── dotnet publish ─────────────────────────────────────────────────────────────
+# -- dotnet publish -------------------------------------------------------------
 
 def publish(rid: str, output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -123,7 +123,7 @@ def publish(rid: str, output_dir: Path) -> None:
         "-o", str(output_dir),
         "--nologo",
     ]
-    print(f"  dotnet publish -r {rid} …")
+    print(f"  dotnet publish -r {rid} ...")
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         print(result.stdout[-3000:] if result.stdout else "")
@@ -131,7 +131,7 @@ def publish(rid: str, output_dir: Path) -> None:
         raise RuntimeError(f"dotnet publish failed for {rid}")
 
 
-# ── packagers ─────────────────────────────────────────────────────────────────
+# -- packagers -----------------------------------------------------------------
 
 def package_windows(target_name: str, rid: str) -> None:
     """Build a .zip containing the single-file .exe."""
@@ -152,7 +152,7 @@ def package_windows(target_name: str, rid: str) -> None:
         with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
             zf.write(exe, exe.name)
 
-        print(f"  → {zip_path}")
+        print(f"  -> {zip_path}")
 
 
 def package_linux(target_name: str, rid: str) -> None:
@@ -172,7 +172,7 @@ def package_linux(target_name: str, rid: str) -> None:
         shutil.copy2(binary, out_bin)
         out_bin.chmod(out_bin.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
-    print(f"  → {out_bin}")
+    print(f"  -> {out_bin}")
 
 
 def package_macos(target_name: str, rid: str) -> None:
@@ -190,7 +190,7 @@ def package_macos(target_name: str, rid: str) -> None:
         if not binary.exists():
             raise FileNotFoundError(f"No binary found at {binary}")
 
-        # ── .app bundle ───────────────────────────────────────────────────────
+        # -- .app bundle -------------------------------------------------------
         app_bundle = tmp_path / f"{APP_NAME}.app"
         macos_dir  = app_bundle / "Contents" / "MacOS"
         res_dir    = app_bundle / "Contents" / "Resources"
@@ -202,9 +202,9 @@ def package_macos(target_name: str, rid: str) -> None:
         shutil.copy2(binary, app_binary)
         app_binary.chmod(app_binary.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
-        # App icon: rasterise graphics/icon.svg → Contents/Resources/AppIcon.icns
+        # App icon: rasterise graphics/icon.svg -> Contents/Resources/AppIcon.icns
         # (Raylib can't load SVG; Finder/Dock read the .icns from the bundle).
-        # Best-effort — a missing/failed icon must not fail packaging.
+        # Best-effort - a missing/failed icon must not fail packaging.
         icon_file = None
         if ICON_SVG.exists():
             try:
@@ -232,7 +232,7 @@ def package_macos(target_name: str, rid: str) -> None:
         with open(app_bundle / "Contents" / "Info.plist", "wb") as f:
             plistlib.dump(plist, f)
 
-        # PkgInfo — legacy 8-byte bundle type/creator file expected by macOS
+        # PkgInfo - legacy 8-byte bundle type/creator file expected by macOS
         (app_bundle / "Contents" / "PkgInfo").write_bytes(b"APPL????")
 
         # Ad-hoc code-sign so Gatekeeper doesn't report the bundle as "damaged".
@@ -247,9 +247,9 @@ def package_macos(target_name: str, rid: str) -> None:
                     check=True, capture_output=True,
                 )
             else:
-                print("  [warn] codesign not found — .app will be unsigned (Gatekeeper may block it)")
+                print("  [warn] codesign not found - .app will be unsigned (Gatekeeper may block it)")
 
-        # ── DMG staging area ─────────────────────────────────────────────────
+        # -- DMG staging area -------------------------------------------------
         staging = tmp_path / "staging"
         staging.mkdir()
 
@@ -268,22 +268,22 @@ def package_macos(target_name: str, rid: str) -> None:
         # .DS_Store for Finder window layout
         write_ds_store(staging / ".DS_Store", bg_image_relative=".background/background.png")
 
-        # ── create the DMG ───────────────────────────────────────────────────
+        # -- create the DMG ---------------------------------------------------
         actual_out = create_dmg(staging, dmg_path, label=APP_NAME)
 
-    print(f"  → {actual_out}")
+    print(f"  -> {actual_out}")
 
 
-# ── DMG creation helpers ──────────────────────────────────────────────────────
+# -- DMG creation helpers ------------------------------------------------------
 
 def create_dmg(staging: Path, output: Path, label: str) -> Path:
     """
     Create a .dmg from a staging directory.  Returns the output path.
 
     Priority order:
-      macOS  → hdiutil   (compressed UDZO, highest quality)
-      Linux  → mkisofs   (cdrtools, HFS+/ISO hybrid; install: paru -S cdrtools)
-      any    → pure-Python HFS+/UDIF builder (zero system dependencies)
+      macOS  -> hdiutil   (compressed UDZO, highest quality)
+      Linux  -> mkisofs   (cdrtools, HFS+/ISO hybrid; install: paru -S cdrtools)
+      any    -> pure-Python HFS+/UDIF builder (zero system dependencies)
     """
     if platform.system() == "Darwin":
         try:
@@ -292,7 +292,7 @@ def create_dmg(staging: Path, output: Path, label: str) -> Path:
         except Exception as e:
             print(f"  [warn] hdiutil failed ({e}); falling back to Python builder")
     else:
-        # Try mkisofs (cdrtools) first — it handles the full HFS+ filesystem
+        # Try mkisofs (cdrtools) first - it handles the full HFS+ filesystem
         # creation and file copying in one step, with no root access required.
         mkisofs = shutil.which("mkisofs") or shutil.which("genisoimage")
         if mkisofs:
@@ -302,7 +302,7 @@ def create_dmg(staging: Path, output: Path, label: str) -> Path:
             except Exception as e:
                 print(f"  [warn] {Path(mkisofs).name} failed ({e}); falling back to Python builder")
 
-    # Pure-Python fallback — zero system dependencies, works everywhere.
+    # Pure-Python fallback - zero system dependencies, works everywhere.
     print("  [info] using pure-Python HFS+/UDIF builder")
     _build_dmg_hfs(staging, output, label)
     return output
@@ -369,14 +369,14 @@ def _create_dmg_hdiutil(staging: Path, output: Path, label: str) -> None:
 
 
 
-# ── DMG background image ──────────────────────────────────────────────────────
+# -- DMG background image ------------------------------------------------------
 
 def create_dmg_background(dest: Path, target_name: str) -> None:
-    """Generate a 540×380 background PNG with drag-to-Applications instructions."""
+    """Generate a 540x380 background PNG with drag-to-Applications instructions."""
     try:
         from PIL import Image, ImageDraw, ImageFont
     except ImportError:
-        # Pillow unavailable — write a 1×1 transparent placeholder
+        # Pillow unavailable - write a 1x1 transparent placeholder
         dest.write_bytes(_minimal_png())
         return
 
@@ -384,7 +384,7 @@ def create_dmg_background(dest: Path, target_name: str) -> None:
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    # Gradient background (dark blue → deep purple)
+    # Gradient background (dark blue -> deep purple)
     for y in range(H):
         t = y / H
         r = int(8  + t * 12)
@@ -416,7 +416,7 @@ def create_dmg_background(dest: Path, target_name: str) -> None:
     _draw_icon_box(draw, apl_cx, apl_cy, "Applications", font_sml,
                    fill=(60, 90, 160, 160))
 
-    # Arrow from .app → Applications
+    # Arrow from .app -> Applications
     ax0, ay = app_cx + 58, app_cy
     ax1     = apl_cx - 58
     _draw_arrow(draw, ax0, ay, ax1, ay)
@@ -483,7 +483,7 @@ def _get_font(size: int):
 
 
 def _minimal_png() -> bytes:
-    """Return a 1×1 transparent PNG as bytes (no Pillow required)."""
+    """Return a 1x1 transparent PNG as bytes (no Pillow required)."""
     import zlib, struct as st
     def chunk(tag: bytes, data: bytes) -> bytes:
         c = zlib.crc32(tag + data) & 0xFFFFFFFF
@@ -495,14 +495,14 @@ def _minimal_png() -> bytes:
     return sig + ihdr + idat + iend
 
 
-# ── .DS_Store creation ────────────────────────────────────────────────────────
+# -- .DS_Store creation --------------------------------------------------------
 
 def write_ds_store(dest: Path, bg_image_relative: str) -> None:
     """
     Write a .DS_Store that configures the Finder DMG window:
-      • custom background image
-      • icon positions for .app and Applications
-      • window bounds
+      - custom background image
+      - icon positions for .app and Applications
+      - window bounds
     """
     try:
         from ds_store import DSStore
@@ -542,7 +542,7 @@ def write_ds_store(dest: Path, bg_image_relative: str) -> None:
         d["Applications"]["Iloc"]    = (385, 210)
 
 
-# ── main ──────────────────────────────────────────────────────────────────────
+# -- main ----------------------------------------------------------------------
 
 ALL_TARGET_NAMES = [f"{os_}-{arch}" for (os_, arch) in TARGETS]
 
@@ -571,7 +571,7 @@ def main() -> None:
         print(f"\n[{target_name}]")
 
         if not ensure_native_lib(os_name, arch, False):
-            print(f"  Skipping {target_name} — native lib unavailable")
+            print(f"  Skipping {target_name} - native lib unavailable")
             continue
 
         try:

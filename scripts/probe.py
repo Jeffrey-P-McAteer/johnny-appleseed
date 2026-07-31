@@ -4,11 +4,11 @@
 # dependencies = []
 # ///
 """
-Johnny Appleseed — hardware probe runner.
+Johnny Appleseed - hardware probe runner.
 
 A thin wrapper that builds and runs the debug measurement binary
 (src/JohnnyAppleseed.Probe). Unlike the game, the probe is a plain local exe and
-is NOT part of the cross-platform packaging pipeline — it is meant to run on the
+is NOT part of the cross-platform packaging pipeline - it is meant to run on the
 machine whose hardware you are testing.
 
 Usage (from repo root):

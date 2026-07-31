@@ -1,15 +1,15 @@
-# Story & content — writer's guide
+# Story & content - writer's guide
 
 This folder holds everything a **writer** edits. You should never need to touch
-C# code to add story, items, or characters. (This README is documentation only —
+C# code to add story, items, or characters. (This README is documentation only --
 it is not shipped inside the game.)
 
 ```
 story/
-  README.md               ← you are here
-  items/items.jsonc       ← inventory items (shared by story + future map)
-  characters/characters.jsonc ← who can speak / appear
-  chapters/…              ← the narrative itself (Ink .ink files) — arriving in Phase 1
+  README.md               <- you are here
+  items/items.jsonc       <- inventory items (shared by story + future map)
+  characters/characters.jsonc <- who can speak / appear
+  chapters/...              <- the narrative itself (Ink .ink files) - arriving in Phase 1
 ```
 
 ## Comments
@@ -27,7 +27,7 @@ consistent everywhere.)
 
 ## Items (`items/items.jsonc`)
 
-Each item is defined **once** and reused by every view of it — the face-to-face
+Each item is defined **once** and reused by every view of it - the face-to-face
 story scene now, and the RPG-style map/codex later. The story refers to an item
 by its `id`.
 
@@ -65,5 +65,5 @@ audio/sfx/<name>.mp3                    short sound effects
 ```
 
 Add the file, reference its key (e.g. `graphics/portraits/johnny.png`), rebuild.
-It doesn't have to exist yet to define an item/character — a missing icon just
+It doesn't have to exist yet to define an item/character - a missing icon just
 won't render until the art is added.

@@ -25,7 +25,7 @@ sealed class ParallaxLayer
 sealed class ParallaxBackground : IDisposable
 {
     // Fragment shader: rotate + tile a texture over a fullscreen quad.
-    // fragTexCoord arrives 0→1; we centre, rotate, scale, translate, then
+    // fragTexCoord arrives 0->1; we centre, rotate, scale, translate, then
     // GL_REPEAT wrapping on the sampler handles seamless tiling.
     private const string FragSrc = @"
 #version 330 core
@@ -129,7 +129,7 @@ void main() {
         _layers = [];
     }
 
-    // ── texture generators ────────────────────────────────────────────────────
+    // -- texture generators ----------------------------------------------------
 
     private static Texture2D GenGradient(int w, int h, int dirDeg, Color from, Color to)
     {

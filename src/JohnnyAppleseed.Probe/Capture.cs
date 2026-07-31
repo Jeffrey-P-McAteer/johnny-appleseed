@@ -6,7 +6,7 @@ namespace JohnnyAppleseed.Probe;
 
 /// <summary>
 /// Developer aid: renders a scene for a fixed amount of simulated time and writes
-/// a PNG screenshot, then exits — no user interaction. Handy for eyeballing UI
+/// a PNG screenshot, then exits - no user interaction. Handy for eyeballing UI
 /// (e.g. the intro typewriter mid-reveal) in a headless/CI context.
 ///
 /// Invoked via <c>uv run scripts/probe.py capture [menu|intro] [seconds] [out.png]</c>.
@@ -18,7 +18,7 @@ static class Capture
     {
         AppData.Initialize();
         Raylib.SetConfigFlags(ConfigFlags.ResizableWindow);
-        Raylib.InitWindow(1280, 720, "Johnny Appleseed — capture");
+        Raylib.InitWindow(1280, 720, "Johnny Appleseed - capture");
         Raylib.SetTargetFPS(60);
         Raylib.InitAudioDevice();   // scenes may load sounds on entry (e.g. menu SFX)
         InputSystem.Initialize();

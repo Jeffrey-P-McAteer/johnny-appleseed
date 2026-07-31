@@ -8,7 +8,7 @@ namespace JohnnyAppleseed.Probe;
 /// layer above it.
 ///
 /// The joystick event record is 8 bytes, little-endian:
-///   uint32 time (ms) · int16 value · uint8 type · uint8 number
+///   uint32 time (ms) - int16 value - uint8 type - uint8 number
 /// type: 0x01 = button, 0x02 = axis, 0x80 flag = synthetic "initial state" event.
 /// </summary>
 static class RawJoystick
@@ -26,7 +26,7 @@ static class RawJoystick
         }
 
         Console.WriteLine($"reading raw kernel events from {device}");
-        Console.WriteLine("(type=BTN/AXIS, number=kernel index, value=state)  —  Ctrl-C to stop\n");
+        Console.WriteLine("(type=BTN/AXIS, number=kernel index, value=state)  -  Ctrl-C to stop\n");
 
         FileStream fs;
         try

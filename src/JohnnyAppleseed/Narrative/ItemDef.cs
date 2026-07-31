@@ -4,7 +4,7 @@ namespace JohnnyAppleseed.Narrative;
 
 /// <summary>
 /// A presentation-agnostic inventory-item definition, authored by writers in
-/// <c>story/items/items.jsonc</c> and shared by every view of the item — the
+/// <c>story/items/items.jsonc</c> and shared by every view of the item - the
 /// face-to-face story scene now, and the future RPG-style map/codex later both
 /// look items up by <see cref="Id"/> and reuse the same name/description/flavor.
 ///

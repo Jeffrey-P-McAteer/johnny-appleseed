@@ -100,12 +100,12 @@
 
 .gallery-prev::after {
     left: 20px;
-    content: "❮";
+    content: "<";
 }
 
 .gallery-next::after {
     right: 20px;
-    content: "❯";
+    content: ">";
 }
 
 .gallery-prev:hover::after {

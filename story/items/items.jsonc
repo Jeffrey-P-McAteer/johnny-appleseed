@@ -1,7 +1,7 @@
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 //  ITEM DEFINITIONS
 //
-//  This is JSONC — plain JSON, except  // line  and  /* block */  comments and
+//  This is JSONC - plain JSON, except  // line  and  /* block */  comments and
 //  trailing commas are allowed and ignored. Leave yourself notes freely.
 //
 //  Every item is defined ONCE here and shared by every view: the face-to-face
@@ -17,7 +17,7 @@
 //                style). Cosmetic; write as many lines as you like.
 //    icon        embedded texture key (add the art under graphics/ui/items/).
 //    stackable   true if copies combine into one count (default true).
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 [
   {
     "id": "apple-seeds",
@@ -40,5 +40,5 @@
     "stackable": false
   },
 
-  // TODO(writer): tin cup, seedling sack, letter from home, …
+  // TODO(writer): tin cup, seedling sack, letter from home, ...
 ]

@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 namespace JohnnyAppleseed.Platform;
 
 /// <summary>
-/// Cross-platform, best-effort native error dialog for fatal startup failures —
+/// Cross-platform, best-effort native error dialog for fatal startup failures --
 /// shown when the game can't get far enough to draw its own UI (most often the
 /// graphics device / OpenGL context failing to initialize). It uses whatever
 /// low-level facility each OS always provides, so it works even when raylib is
@@ -27,8 +27,8 @@ static class StartupError
             Console.Error.WriteLine($"[johnny-appleseed] could not show error dialog: {ex.Message}");
         }
 
-        // Universal fallback — also useful when launched from a terminal.
-        Console.Error.WriteLine($"[johnny-appleseed] STARTUP ERROR — {title}\n{message}");
+        // Universal fallback - also useful when launched from a terminal.
+        Console.Error.WriteLine($"[johnny-appleseed] STARTUP ERROR - {title}\n{message}");
     }
 
     // Windows: MessageBoxW is always available and its text is Ctrl+C copyable.
@@ -73,6 +73,6 @@ static class StartupError
     static bool TryRun(string file, string[] args)
     {
         try { Run(file, args); return true; }
-        catch { return false; }   // command not installed → try the next one
+        catch { return false; }   // command not installed -> try the next one
     }
 }

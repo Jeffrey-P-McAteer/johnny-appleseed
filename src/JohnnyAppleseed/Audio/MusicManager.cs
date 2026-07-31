@@ -25,7 +25,7 @@ static class MusicManager
 
     private static Track _cur;    // fading in, then steady
     private static Track _prev;   // fading out during a cross-fade
-    private static float _fade;   // 0→1 progress of the current fade
+    private static float _fade;   // 0->1 progress of the current fade
     private static float _fadeDur;
     private static float _master = 1f;
 
@@ -39,13 +39,13 @@ static class MusicManager
     /// <summary>
     /// Play the track at the embedded asset <paramref name="key"/> (e.g.
     /// "audio/music/frontier_theme.ogg"), cross-fading from whatever is playing.
-    /// If that track is already current, this is a no-op — the music keeps playing
+    /// If that track is already current, this is a no-op - the music keeps playing
     /// seamlessly across the scene change.
     /// </summary>
     public static void Play(string key, bool loop = true, float fadeSeconds = 0.75f)
     {
         if (_cur.Active && _cur.Key == key)
-            return;                                   // already current → don't restart
+            return;                                   // already current -> don't restart
 
         // Only one outgoing track at a time; retire any older fade immediately.
         if (_prev.Active)

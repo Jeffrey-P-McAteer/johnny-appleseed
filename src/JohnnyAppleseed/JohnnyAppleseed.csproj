@@ -15,8 +15,8 @@
       compatible. .NET enables this by default on x64, which turns on hardware
       shadow stacks for the process. CoreCLR then requires the OS to provide
       Special User-Mode APCs (QueueUserAPC2); when a CPU/VM exposes CET shadow
-      stacks but that APC capability is missing — common in VMs and some older
-      Windows builds — the runtime hits an incompatible state and dies with
+      stacks but that APC capability is missing - common in VMs and some older
+      Windows builds - the runtime hits an incompatible state and dies with
       "!AreShadowStacksEnabled() || UseSpecialUserModeApc()" (threads.cpp) /
       fails to launch. Opting out avoids that path. x64-Windows-only knob; a
       no-op on Linux/macOS/arm64. See dotnet/runtime#110000.
@@ -46,13 +46,13 @@
   </ItemGroup>
 
   <!--
-    inkle's ink — the branching-narrative engine (Ink.Runtime.Story) + compiler
+    inkle's ink - the branching-narrative engine (Ink.Runtime.Story) + compiler
     (Ink.Compiler, compiles authored .ink at runtime so writers' raw .ink ships and
     can hot-reload). Both MIT, netstandard2.0. inkle publishes no usable NuGet, so
     rather than commit their source we fetch + build it with a script (mirroring
     how setup-native-libs.py provisions native libs). The built DLLs live in the
-    gitignored build/vendor/ink/ and are referenced by HintPath (Private=true →
-    copied to output → bundled into the single-file publish).
+    gitignored build/vendor/ink/ and are referenced by HintPath (Private=true ->
+    copied to output -> bundled into the single-file publish).
 
         uv run scripts/setup-vendor-libs.py ink
   -->
@@ -77,9 +77,9 @@
   </ItemGroup>
 
   <!--
-    ══════════════════════════════════════════════════════════════════════════
-    Game assets — embedded into the assembly
-    ══════════════════════════════════════════════════════════════════════════
+    ==========================================================================
+    Game assets - embedded into the assembly
+    ==========================================================================
     Every file under the repo's audio/ and graphics/ trees is compiled in as an
     embedded resource, so the shipped single-file binary carries its assets with
     no loose folder alongside it. The logical resource name mirrors the source
@@ -98,8 +98,8 @@
                       Condition="Exists('$(MSBuildThisFileDirectory)..\..\graphics')"
                       LogicalName="graphics/%(RecursiveDir)%(Filename)%(Extension)" />
     <!--
-      Authored narrative content, read at runtime via Assets by the key "story/…":
-      item/character definitions (*.jsonc — comments allowed) and the ink stories
+      Authored narrative content, read at runtime via Assets by the key "story/...":
+      item/character definitions (*.jsonc - comments allowed) and the ink stories
       themselves (*.ink, compiled at runtime by Ink.Compiler). Writer docs
       (README.md) are intentionally NOT embedded.
     -->
@@ -109,28 +109,28 @@
     <!-- Empty-folder placeholders are for repo structure only; never embed them.
          Raw *.aseprite sources aren't shipped either: the GenerateAsepriteArt
          target below rasterises them to graphics/<name>.png/.gif (into obj/) and
-         embeds those instead — the game can't read the .aseprite format. -->
+         embeds those instead - the game can't read the .aseprite format. -->
     <EmbeddedResource Remove="$(MSBuildThisFileDirectory)..\..\audio\**\.gitkeep;$(MSBuildThisFileDirectory)..\..\graphics\**\.gitkeep;$(MSBuildThisFileDirectory)..\..\graphics\**\*.aseprite" />
   </ItemGroup>
 
   <!-- Let the debug hardware-probe reuse internal classes (InputSystem, AppData,
-       BuildInfo, …). Test/tooling access only; does not affect the shipped game. -->
+       BuildInfo, ...). Test/tooling access only; does not affect the shipped game. -->
   <ItemGroup>
     <InternalsVisibleTo Include="JohnnyAppleseed.Probe" />
   </ItemGroup>
 
   <!--
-    ══════════════════════════════════════════════════════════════════════════
+    ==========================================================================
     Build-time stamp: generates obj/.../BuildInfo.cs before CoreCompile with
     version (from version.txt), UTC timestamp, hostname, and git short hash.
     The file is in obj/ so it is never checked into version control.
-    ══════════════════════════════════════════════════════════════════════════
+    ==========================================================================
   -->
   <Target Name="GenerateBuildInfo" BeforeTargets="CoreCompile">
 
-    <!-- ── version: YYYY.MM.(hours elapsed in month, UTC) ───────────────── -->
+    <!-- == version: YYYY.MM.(hours elapsed in month, UTC) ================= -->
     <!-- No version file to maintain. Format gives ~744 distinct values per  -->
-    <!-- month (31d × 24h) — enough for multiple releases per day.           -->
+    <!-- month (31d x 24h) - enough for multiple releases per day.           -->
     <!-- Examples: 2026.07.0  (July 1 00:xx UTC)                             -->
     <!--           2026.07.375 (July 16 15:xx UTC)                           -->
     <PropertyGroup>
@@ -140,12 +140,12 @@
       <_BuildVersion>$([System.DateTime]::UtcNow.ToString("yyyy")).$([System.DateTime]::UtcNow.ToString("MM")).$(_VHoursInMonth)</_BuildVersion>
     </PropertyGroup>
 
-    <!-- ── UTC build timestamp ───────────────────────────────────────────── -->
+    <!-- == UTC build timestamp ============================================= -->
     <PropertyGroup>
       <_BuildDate>$([System.DateTime]::UtcNow.ToString("yyyy-MM-dd HH:mm:ss")) UTC</_BuildDate>
     </PropertyGroup>
 
-    <!-- ── hostname ──────────────────────────────────────────────────────── -->
+    <!-- == hostname ======================================================== -->
     <Exec Command="hostname"
           ConsoleToMSBuild="true"
           IgnoreExitCode="true"
@@ -161,7 +161,7 @@
       <_BuildHost Condition="'$(_BuildHost)' == ''">unknown</_BuildHost>
     </PropertyGroup>
 
-    <!-- ── git short hash ────────────────────────────────────────────────── -->
+    <!-- == git short hash ================================================== -->
     <Exec Command="git rev-parse --short HEAD"
           ConsoleToMSBuild="true"
           IgnoreExitCode="true"
@@ -174,23 +174,23 @@
       <_GitHash Condition="'$(_GitHash)' == ''">untracked</_GitHash>
     </PropertyGroup>
 
-    <!-- ── Wayland support flag ───────────────────────────────────────────── -->
+    <!-- == Wayland support flag ============================================= -->
     <!-- True only when publishing for linux-x64 AND the multi-platform Wayland
          libraylib.so (built by setup-native-libs.py linux-wayland) is present.
          Baking this into the binary eliminates the need for a sidecar sentinel
-         file — the compiled constant survives any packaging scheme. -->
+         file - the compiled constant survives any packaging scheme. -->
     <PropertyGroup>
       <_WaylandEnabled>false</_WaylandEnabled>
       <_WaylandEnabled Condition="'$(RuntimeIdentifier)' == 'linux-x64' And
                                    Exists('$(MSBuildThisFileDirectory)runtimes/linux-x64/native/libraylib.so')">true</_WaylandEnabled>
     </PropertyGroup>
 
-    <!-- ── write BuildInfo.cs to the intermediate output directory ──────── -->
+    <!-- == write BuildInfo.cs to the intermediate output directory ======== -->
     <MakeDir Directories="$(IntermediateOutputPath)" />
     <!-- Notes on MSBuild item escaping:
            %22 = "   %3B = ;   &lt; = <   &gt; = >
          MSBuild strips leading whitespace from Include values, so indentation
-         is omitted — the C# compiler does not require it.
+         is omitted - the C# compiler does not require it.
          Semicolons in code lines must be %3B or they split the item list.  -->
     <ItemGroup>
       <_BuildInfoLines Include="// &lt;auto-generated /&gt; - regenerated on every compile - do not edit" />
@@ -216,29 +216,29 @@
   </Target>
 
   <!--
-    ══════════════════════════════════════════════════════════════════════════
-    Icon generation: graphics/icon.svg → obj/{icon.png, icon.ico}
-    ══════════════════════════════════════════════════════════════════════════
+    ==========================================================================
+    Icon generation: graphics/icon.svg -> obj/{icon.png, icon.ico}
+    ==========================================================================
     Raylib cannot load SVG, so scripts/_icons.py rasterises the vector source to
     the raster formats the icon pipeline needs, writing them into the gitignored
     intermediate dir (obj/), alongside the generated BuildInfo.cs:
 
-      icon.png  → embedded resource; Game.cs calls Raylib.SetWindowIcon with it
+      icon.png  -> embedded resource; Game.cs calls Raylib.SetWindowIcon with it
                   (window title bar on Windows + X11).
-      icon.ico  → <ApplicationIcon>; the .NET SDK stamps it into the Windows
+      icon.ico  -> <ApplicationIcon>; the .NET SDK stamps it into the Windows
                   apphost .exe (Explorer / taskbar). Cross-platform: the SDK's
                   managed PE resource writer stamps the win apphost even when
                   publishing from Linux/macOS.
 
     Best-effort: the <Exec> needs `uv` + Pillow. If they're unavailable it is
     ignored (IgnoreExitCode) and the Exists()-gated items below simply don't apply
-    — the game builds fine, just without a custom icon. The macOS .app icon
+    - the game builds fine, just without a custom icon. The macOS .app icon
     (.icns) is generated separately by scripts/package.py at packaging time.
   -->
   <!-- Runs before AssignTargetPaths so the generated icon.png flows through the
        normal resource-naming pipeline (CreateManifestResourceNames honours its
        LogicalName). Adding an EmbeddedResource in a BeforeTargets=CoreCompile
-       target is too late — resource names are already assigned by then. -->
+       target is too late - resource names are already assigned by then. -->
   <Target Name="GenerateIcons" BeforeTargets="AssignTargetPaths;CoreCompile">
     <PropertyGroup>
       <_IconSvg>$(MSBuildThisFileDirectory)..\..\graphics\icon.svg</_IconSvg>
@@ -267,13 +267,13 @@
   </Target>
 
   <!--
-    ══════════════════════════════════════════════════════════════════════════
-    Aseprite art  →  embedded PNG / GIF
-    ══════════════════════════════════════════════════════════════════════════
+    ==========================================================================
+    Aseprite art  ->  embedded PNG / GIF
+    ==========================================================================
     Rasterises every graphics/**/*.aseprite into obj/aseprite/ (gitignored) and
     embeds the results under the key "graphics/<name>.png" / ".gif". Frame count
-    decides the outputs (scripts/aseprite-export.py): 1 frame → PNG + GIF, many
-    frames → GIF only. The raw .aseprite is not shipped (Removed from the embed
+    decides the outputs (scripts/aseprite-export.py): 1 frame -> PNG + GIF, many
+    frames -> GIF only. The raw .aseprite is not shipped (Removed from the embed
     glob above); the game can't read that format anyway.
 
     Same BeforeTargets timing rationale as GenerateIcons: the EmbeddedResource
@@ -281,7 +281,7 @@
     resource naming. Best-effort: the export needs the Aseprite binary that
     scripts/run-aseprite.py builds under build/aseprite/. If it isn't built the
     exporter prints a notice and exits 0 (IgnoreExitCode), so `dotnet build` never
-    blocks on a from-source Aseprite compile — provision it once by running
+    blocks on a from-source Aseprite compile - provision it once by running
     scripts/run-aseprite.py in no-run mode.
   -->
   <Target Name="GenerateAsepriteArt" BeforeTargets="AssignTargetPaths;CoreCompile">
@@ -307,7 +307,7 @@
          Stage into a private item type first, then reference *qualified* metadata
          (%(_AsepriteArt.*)). Using bare %(RecursiveDir)/%(Filename) in a target-level
          EmbeddedResource batches over the EXISTING EmbeddedResource items instead of
-         these, cross-producing every wrong LogicalName (→ CS1508 collisions). -->
+         these, cross-producing every wrong LogicalName (-> CS1508 collisions). -->
     <ItemGroup Condition="Exists('$(_AseArtDir)')">
       <_AsepriteArt Include="$(_AseArtDir)\**\*.png;$(_AseArtDir)\**\*.gif" />
       <EmbeddedResource Include="@(_AsepriteArt)"
@@ -316,9 +316,9 @@
   </Target>
 
   <!--
-    ══════════════════════════════════════════════════════════════════════════
+    ==========================================================================
     Native library overrides
-    ══════════════════════════════════════════════════════════════════════════
+    ==========================================================================
     Override / supplement native libs for RIDs missing from or improved beyond
     the Raylib-cs NuGet package.  Files are only included when present on disk,
     so a clean checkout builds fine with the NuGet defaults.
@@ -389,12 +389,12 @@
     Override the NuGet-provided native lib with a locally-built/downloaded one when
     present (placed by setup-native-libs.py). The RID-specific native lib is
     published to the output ROOT with a bare RelativePath (e.g. "libraylib.so") and
-    bundled into the single-file exe — that root copy is what the app dlopen()s — so
+    bundled into the single-file exe - that root copy is what the app dlopen()s - so
     we must swap it there.
 
     Hook: AfterTargets="ComputeResolvedFilesToPublishList" (builds @(ResolvedFileToPublish),
     consumed by BOTH the plain copy AND the single-file bundler). The OLD targets used
-    AfterTargets="ResolveNativeAssets" + item ResolvedNativeAssetToPublish — NEITHER
+    AfterTargets="ResolveNativeAssets" + item ResolvedNativeAssetToPublish - NEITHER
     exists in the .NET 9 SDK, so they silently never ran and the stock (JPEG-less,
     X11-only) NuGet lib was shipped. Each target stays RID- and file-existence-gated,
     so a clean checkout with no local override still ships the NuGet defaults.

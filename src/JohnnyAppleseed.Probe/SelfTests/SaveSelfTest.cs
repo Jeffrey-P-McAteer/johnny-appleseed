@@ -44,7 +44,7 @@ static class SaveSelfTest
     // exact page we left off at.
     private static int RoundTripAndResume()
     {
-        Console.WriteLine("• round-trip + resume-at-step");
+        Console.WriteLine("- round-trip + resume-at-step");
         int fails = 0;
 
         // Fresh start.
@@ -82,7 +82,7 @@ static class SaveSelfTest
     // A save missing newer fields should deserialize them to defaults, not throw.
     private static int MissingFieldsUseDefaults()
     {
-        Console.WriteLine("• missing fields → defaults");
+        Console.WriteLine("- missing fields -> defaults");
         int fails = 0;
 
         // Minimal document with only a format version present.
@@ -98,7 +98,7 @@ static class SaveSelfTest
     // Fields a future build might add must survive a load/save by an older build.
     private static int UnknownFieldsPreserved()
     {
-        Console.WriteLine("• unknown (future) fields preserved");
+        Console.WriteLine("- unknown (future) fields preserved");
         int fails = 0;
 
         File.WriteAllText(SaveSystem.SavePath,
@@ -117,7 +117,7 @@ static class SaveSelfTest
     // A save written by a newer schema must not have its version number lowered.
     private static int NewerFormatNotDowngraded()
     {
-        Console.WriteLine("• newer format version left intact");
+        Console.WriteLine("- newer format version left intact");
         int fails = 0;
 
         File.WriteAllText(SaveSystem.SavePath,

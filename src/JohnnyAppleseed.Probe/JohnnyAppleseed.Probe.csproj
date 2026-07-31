@@ -1,18 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    ══════════════════════════════════════════════════════════════════════════
+    ==========================================================================
     Hardware-probe binary.
 
     A throwaway *debug* tool that reuses the real game's code (input layer,
-    app-data paths, build stamp) but replaces Main() with measurement logic —
+    app-data paths, build stamp) but replaces Main() with measurement logic -
     used to prove what a real controller reports (raw button/axis codes, which
     slot it enumerates on, whether the game's InputSystem picks it up).
 
     Deliberately NOT part of the cross-platform build/package pipeline: it is a
     plain framework-dependent exe meant to run on whatever machine we are testing
     on. No single-file / self-contained / RID juggling.
-    ══════════════════════════════════════════════════════════════════════════
+    ==========================================================================
   -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -25,7 +25,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Reuse the game's classes (InputSystem, AppData, BuildInfo, …). The game
+    <!-- Reuse the game's classes (InputSystem, AppData, BuildInfo, ...). The game
          exposes its internals to this assembly via <InternalsVisibleTo>. -->
     <ProjectReference Include="..\JohnnyAppleseed\JohnnyAppleseed.csproj" />
 

@@ -15,13 +15,13 @@ namespace JohnnyAppleseed.Narrative;
 /// </summary>
 static class Director
 {
-    /// <summary>The story reached its end — persist completion and go to the menu.</summary>
+    /// <summary>The story reached its end - persist completion and go to the menu.</summary>
     public static IScene OnStoryComplete(SaveData save)
     {
         save.Story.IntroComplete = true;
         save.Story.Checkpoint = Checkpoint.Overworld;
         save.World.CurrentNode = "";
-        save.World.InkState = null;      // finished → nothing to resume
+        save.World.InkState = null;      // finished -> nothing to resume
         SaveSystem.Save(save);
         return new MainMenuScene();
     }

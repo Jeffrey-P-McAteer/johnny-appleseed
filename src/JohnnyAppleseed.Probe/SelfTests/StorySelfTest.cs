@@ -6,7 +6,7 @@ namespace JohnnyAppleseed.Probe;
 
 /// <summary>
 /// Headless checks for the ink-driven story pipeline: the intro compiles, steps
-/// through the expected beats/headings, reaches the end, and — critically — its
+/// through the expected beats/headings, reaches the end, and - critically - its
 /// runtime state round-trips so <see cref="JohnnyAppleseed.Scenes.StoryScene"/>
 /// can resume mid-story. No window/audio required. Exit 0 = all passed.
 /// </summary>

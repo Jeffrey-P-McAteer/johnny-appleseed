@@ -14,32 +14,32 @@ is linux-wayland, which must be built from source (using Zig) because no
 pre-built binary ships with both X11 and Wayland GLFW backends compiled in.
 
 Targets
-───────
+-------
   linux-x64       Download official release binary
-  linux-arm64     Download official release binary  ← was broken on 5.5; fixed for 6.0+
-  linux-wayland   Build from source (Zig) — X11 + Wayland multi-platform backend
+  linux-arm64     Download official release binary  <- was broken on 5.5; fixed for 6.0+
+  linux-wayland   Build from source (Zig) - X11 + Wayland multi-platform backend
   win-x64         Download official release binary (mingw-w64 build)
-  win-x64-ndebug  Build from source (Zig) — mingw ABI with NDEBUG (asserts OFF), so
+  win-x64-ndebug  Build from source (Zig) - mingw ABI with NDEBUG (asserts OFF), so
                   no-OpenGL machines fail gracefully instead of abort()ing in GLFW
-  win-arm64       Download official release binary  ← was Zig cross-compile; now download
+  win-arm64       Download official release binary  <- was Zig cross-compile; now download
   macos-x64       Download official release binary (universal fat Mach-O)
   macos-arm64     Download official release binary (same fat binary as macos-x64)
 
 Usage
-─────
+-----
     uv run scripts/setup-native-libs.py                   # all targets
     uv run scripts/setup-native-libs.py linux-arm64       # one target
     uv run scripts/setup-native-libs.py win-arm64 macos-x64 macos-arm64
     uv run scripts/setup-native-libs.py --rebuild         # force re-download/build
 
 System requirements
-───────────────────
-  All targets except linux-wayland require no system packages — they are pure
+-------------------
+  All targets except linux-wayland require no system packages - they are pure
   HTTP downloads.
 
   linux-wayland requires:
-    • wayland-scanner   (generates Wayland protocol headers at build time)
-    • X11 headers       (for the dual X11+Wayland backend)
+    - wayland-scanner   (generates Wayland protocol headers at build time)
+    - X11 headers       (for the dual X11+Wayland backend)
       Arch:   sudo pacman -S wayland libx11
       Debian: sudo apt install libwayland-dev libx11-dev
 
@@ -65,7 +65,7 @@ from pathlib import Path
 
 import requests
 
-# ── paths ──────────────────────────────────────────────────────────────────────
+# -- paths ----------------------------------------------------------------------
 
 REPO_ROOT  = Path(__file__).resolve().parent.parent
 BUILD_DIR  = REPO_ROOT / "build"
@@ -89,17 +89,17 @@ ZIG_ARCHIVES = {
     "macos-arm64": f"zig-aarch64-macos-{ZIG_VERSION}.tar.xz",
 }
 
-# ── target definitions ─────────────────────────────────────────────────────────
+# -- target definitions ---------------------------------------------------------
 #
-# DOWNLOAD_TARGETS — fetched from the latest GitHub release.
+# DOWNLOAD_TARGETS - fetched from the latest GitHub release.
 #   keywords   All must appear (case-insensitive) in the asset filename.
 #   exclude    Any match disqualifies the asset.
 #   lib_glob   Filename pattern (fnmatch) to locate the lib inside the archive.
 #   dest       Where to place the extracted file in the project runtimes/ tree.
-#   elf_machine / pe_machine — architecture constant for binary verification.
+#   elf_machine / pe_machine - architecture constant for binary verification.
 #              macOS libs (fat Mach-O) are verified by magic-byte check instead.
 #
-# BUILD_TARGETS — built from Raylib source via `zig build`.
+# BUILD_TARGETS - built from Raylib source via `zig build`.
 #   zig_target  Passed to -Dtarget=; None means native host build.
 #   display     Passed to -Dlinux_display_backend=  (Linux only).
 #   out_name    fnmatch glob for the library name in zig-out/lib/ or zig-out/bin/.
@@ -109,7 +109,7 @@ ZIG_ARCHIVES = {
 #               `#ifndef`, so a -D here overrides the default. We use this to turn
 #               ON the image loaders raylib disables by default (JPG/BMP/TGA/PSD),
 #               so original art (e.g. embedded .jpg) decodes in our from-source
-#               builds — the stock download builds already ship these enabled.
+#               builds - the stock download builds already ship these enabled.
 
 DOWNLOAD_TARGETS: dict[str, dict] = {
     "linux-x64": {
@@ -160,7 +160,7 @@ BUILD_TARGETS: dict[str, dict] = {
     # so on a machine with no usable OpenGL, a raylib call that receives GLFW's
     # NULL window handle (e.g. glfwSetWindowSizeLimits) abort()s with a raw
     # "Assertion failed" box that our managed startup-error dialog can't catch.
-    # With asserts stripped, those paths no longer abort — belt-and-suspenders on
+    # With asserts stripped, those paths no longer abort - belt-and-suspenders on
     # top of the IsWindowReady() guard in Game.Run. Zig bundles the MinGW + Windows
     # SDK headers, so this cross-compiles from Linux with NO system packages, and
     # produces the same GNU/cdecl ABI DLL the download target does (P/Invoke-safe,
@@ -174,7 +174,7 @@ BUILD_TARGETS: dict[str, dict] = {
         "pe_machine":  0x8664,           # IMAGE_FILE_MACHINE_AMD64
         # From-source builds default these image loaders OFF (raylib config.h
         # #ifndef guards); the download build ships them ON. Re-enable so the
-        # embedded still-life .jpg still decodes — same fix as linux-wayland.
+        # embedded still-life .jpg still decodes - same fix as linux-wayland.
         "config": [
             "-DSUPPORT_FILEFORMAT_JPG=1",
             "-DSUPPORT_FILEFORMAT_BMP=1",
@@ -183,7 +183,7 @@ BUILD_TARGETS: dict[str, dict] = {
         ],
     },
     # Build natively (no -Dtarget) so Zig uses pkg-config to discover system
-    # libraries (X11, GLX, wayland-client, xkbcommon, …).  An explicit
+    # libraries (X11, GLX, wayland-client, xkbcommon, ...).  An explicit
     # cross-target breaks system-library discovery on Linux and produces errors.
     "linux-wayland": {
         "zig_target":  None,
@@ -194,7 +194,7 @@ BUILD_TARGETS: dict[str, dict] = {
         "elf_machine": 0x3E,
         # Enable raylib's off-by-default image loaders so embedded original art
         # (JPEG photos, BMP/TGA/PSD exports) decodes. Without these, raylib's
-        # config.h leaves them at 0 and LoadImageFromMemory(".jpg", …) returns
+        # config.h leaves them at 0 and LoadImageFromMemory(".jpg", ...) returns
         # "Data format not supported". (PNG/GIF/QOI are already on by default.)
         "config": [
             "-DSUPPORT_FILEFORMAT_JPG=1",
@@ -207,11 +207,11 @@ BUILD_TARGETS: dict[str, dict] = {
 
 ALL_TARGETS = {**DOWNLOAD_TARGETS, **BUILD_TARGETS}
 
-# ── GitHub release query ───────────────────────────────────────────────────────
+# -- GitHub release query -------------------------------------------------------
 
 def fetch_latest_release() -> tuple[str, list[dict]]:
     """Return (tag_name, assets) for the latest Raylib GitHub release."""
-    print("  Querying GitHub API for latest Raylib release …")
+    print("  Querying GitHub API for latest Raylib release ...")
     r = requests.get(
         GITHUB_API, timeout=30,
         headers={"Accept": "application/vnd.github.v3+json"},
@@ -244,7 +244,7 @@ def match_asset(assets: list[dict], keywords: list[str],
     return min(matches, key=lambda a: len(a["name"]))
 
 
-# ── download helpers ───────────────────────────────────────────────────────────
+# -- download helpers -----------------------------------------------------------
 
 def download(url: str, dest: Path, desc: str) -> Path:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -252,7 +252,7 @@ def download(url: str, dest: Path, desc: str) -> Path:
     if dest.exists():
         print(f"  Cached: {dest.name}")
         return dest
-    print(f"  Downloading {desc} …")
+    print(f"  Downloading {desc} ...")
     r = requests.get(url, stream=True, timeout=300)
     r.raise_for_status()
     total = int(r.headers.get("content-length", 0))
@@ -303,7 +303,7 @@ def extract_lib(archive: Path, lib_glob: str, dest: Path) -> None:
                 dest.write_bytes(fobj.read())
                 if member.mode:
                     dest.chmod(member.mode | stat.S_IRUSR | stat.S_IRGRP)
-                print(f"  Extracted {member.name}  →  {dest.relative_to(REPO_ROOT)}")
+                print(f"  Extracted {member.name}  ->  {dest.relative_to(REPO_ROOT)}")
                 return
 
     elif archive.name.endswith(".zip"):
@@ -315,7 +315,7 @@ def extract_lib(archive: Path, lib_glob: str, dest: Path) -> None:
                 dest.write_bytes(zf.read(info.filename))
                 unix_mode = (info.external_attr >> 16) & 0xFFFF
                 dest.chmod(unix_mode if unix_mode else 0o755)
-                print(f"  Extracted {info.filename}  →  {dest.relative_to(REPO_ROOT)}")
+                print(f"  Extracted {info.filename}  ->  {dest.relative_to(REPO_ROOT)}")
                 return
 
     else:
@@ -327,7 +327,7 @@ def extract_lib(archive: Path, lib_glob: str, dest: Path) -> None:
     )
 
 
-# ── binary verification ────────────────────────────────────────────────────────
+# -- binary verification --------------------------------------------------------
 
 def verify_elf(path: Path, expected_machine: int) -> bool:
     try:
@@ -374,11 +374,11 @@ def verify_lib(path: Path, cfg: dict) -> bool:
         return verify_elf(path, cfg["elf_machine"])
     if "pe_machine" in cfg:
         return verify_pe(path, cfg["pe_machine"])
-    # macOS fat Mach-O — check magic bytes only (no single-arch machine field)
+    # macOS fat Mach-O - check magic bytes only (no single-arch machine field)
     return verify_macho(path)
 
 
-# ── download-based provisioning ────────────────────────────────────────────────
+# -- download-based provisioning ------------------------------------------------
 
 def provision_download(name: str, cfg: dict, tag: str, assets: list[dict]) -> None:
     asset = match_asset(assets, cfg["keywords"], cfg.get("exclude"))
@@ -409,10 +409,10 @@ def provision_download(name: str, cfg: dict, tag: str, assets: list[dict]) -> No
 
     # Ensure the shared library is executable (ZIP archives sometimes lose this).
     dest.chmod(dest.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-    print(f"  ✓ {dest.relative_to(REPO_ROOT)}  ({dest.stat().st_size // 1024} KB)")
+    print(f"  OK {dest.relative_to(REPO_ROOT)}  ({dest.stat().st_size // 1024} KB)")
 
 
-# ── Zig toolchain (linux-wayland build only) ───────────────────────────────────
+# -- Zig toolchain (linux-wayland build only) -----------------------------------
 
 def host_key() -> str:
     s = platform.system().lower()
@@ -438,7 +438,7 @@ def ensure_zig() -> Path:
         CACHE_DIR / archive_name,
         f"Zig {ZIG_VERSION}",
     )
-    print("  Extracting Zig …")
+    print("  Extracting Zig ...")
     zig_dir.mkdir(parents=True, exist_ok=True)
     with tarfile.open(archive, "r:xz") as tf:
         # Strip the leading zig-linux-x86_64-0.14.0/ prefix from all members
@@ -467,7 +467,7 @@ def ensure_raylib_source(tag: str) -> Path:
 
     url = f"https://github.com/raysan5/raylib/archive/refs/tags/{tag}.tar.gz"
     archive = download(url, CACHE_DIR / f"raylib-{tag}.tar.gz", f"Raylib {tag} source")
-    print("  Extracting Raylib source …")
+    print("  Extracting Raylib source ...")
     SRC_DIR.mkdir(parents=True, exist_ok=True)
     with tarfile.open(archive, "r:gz") as tf:
         tf.extractall(SRC_DIR)
@@ -486,10 +486,10 @@ def check_wayland_requirements() -> None:
         "/usr/include/X11/Xlib.h",
         "/usr/local/include/X11/Xlib.h",
     ]):
-        missing.append("X11 headers  →  sudo pacman -S libx11  /  sudo apt install libx11-dev")
+        missing.append("X11 headers  ->  sudo pacman -S libx11  /  sudo apt install libx11-dev")
     if not (shutil.which("wayland-scanner") or
             Path("/usr/sbin/wayland-scanner").exists()):
-        missing.append("wayland-scanner  →  sudo pacman -S wayland  /  sudo apt install libwayland-dev")
+        missing.append("wayland-scanner  ->  sudo pacman -S wayland  /  sudo apt install libwayland-dev")
     if missing:
         raise RuntimeError(
             "Missing requirements for linux-wayland build:\n  " +
@@ -502,7 +502,7 @@ def disable_zig_examples(raylib: Path) -> None:
     raylib's build.zig installs every example program into the default build
     step, so a plain `zig build` also compiles ~250 example exes.  We only want
     the library, and on the Windows cross-target one example (rlgl_standalone,
-    which reaches into GLFW internals) fails to *link* — which would fail the
+    which reaches into GLFW internals) fails to *link* - which would fail the
     whole build even though libraylib built fine.
 
     Neutralize the per-example install so the default step builds only the lib.
@@ -518,13 +518,13 @@ def disable_zig_examples(raylib: Path) -> None:
         text = text.replace(
             needle,
             "        // b.installArtifact(exe);  // disabled by "
-            "setup-native-libs.py — build the library only\n",
+            "setup-native-libs.py - build the library only\n",
             1,
         )
         build_zig.write_text(text)
         print("  Patched build.zig: examples excluded from the default build")
     elif "disabled by setup-native-libs.py" not in text:
-        print("  Note: example-install line not found in build.zig — relying on "
+        print("  Note: example-install line not found in build.zig - relying on "
               "post-build library verification instead")
 
 
@@ -556,14 +556,14 @@ def provision_zig_build(zig: Path, raylib: Path, cfg: dict) -> None:
     if cfg.get("config"):
         extra += f" -Dconfig='{' '.join(cfg['config'])}'"
     print(f"  zig build -Dtarget={target_label} -Dlinkage=dynamic{extra}")
-    print("  (streaming output — first run may take a minute)\n")
+    print("  (streaming output - first run may take a minute)\n")
 
     result = subprocess.run(cmd, cwd=raylib, env=env)
     # Don't hard-fail on a non-zero exit: we only need the library, and a stray
     # example that fails to build/link must not sink the whole run. The real
     # gate is whether a verified library artifact was produced (checked below).
     if result.returncode != 0:
-        print(f"  Note: `zig build` exited {result.returncode} — checking for the "
+        print(f"  Note: `zig build` exited {result.returncode} - checking for the "
               "library artifact anyway (an example may have failed to build)")
 
     # Search for the output lib (glob handles versioned names like libraylib.so.6.0)
@@ -588,14 +588,14 @@ def provision_zig_build(zig: Path, raylib: Path, cfg: dict) -> None:
     dest: Path = cfg["dest"]
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(lib_file, dest)
-    print(f"\n  ✓ {dest.relative_to(REPO_ROOT)}  ({dest.stat().st_size // 1024} KB)")
+    print(f"\n  OK {dest.relative_to(REPO_ROOT)}  ({dest.stat().st_size // 1024} KB)")
 
     if sentinel := cfg.get("sentinel"):
         sentinel.write_text("wayland-enabled\n")
-        print(f"  ✓ {sentinel.relative_to(REPO_ROOT)}")
+        print(f"  OK {sentinel.relative_to(REPO_ROOT)}")
 
 
-# ── main ───────────────────────────────────────────────────────────────────────
+# -- main -----------------------------------------------------------------------
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -623,22 +623,22 @@ def main() -> None:
 
     os.chdir(REPO_ROOT)
 
-    # ── fetch release metadata (always needed — even for build targets, we pull
-    #    source at the same tag as the latest release for consistency) ─────────
-    print("── Raylib release ──────────────────────────────────────────────────")
+    # -- fetch release metadata (always needed - even for build targets, we pull
+    #    source at the same tag as the latest release for consistency) ---------
+    print("-- Raylib release --------------------------------------------------")
     tag, assets = fetch_latest_release()
     print()
 
-    # ── set up Zig only when a build target is requested ─────────────────────
+    # -- set up Zig only when a build target is requested ---------------------
     zig = raylib_src = None
     if any(t in BUILD_TARGETS for t in args.targets):
-        print("── Zig toolchain ───────────────────────────────────────────────────")
+        print("-- Zig toolchain ---------------------------------------------------")
         zig         = ensure_zig()
         raylib_src  = ensure_raylib_source(tag)
         print()
 
     # linux-wayland is built from source into the SAME file as the linux-x64
-    # download (runtimes/linux-x64/native/libraylib.so) — it is meant to REPLACE
+    # download (runtimes/linux-x64/native/libraylib.so) - it is meant to REPLACE
     # the stock lib with an X11+Wayland build that also enables extra image formats
     # (JPG/BMP/TGA/PSD). If both are requested, the download runs first and the
     # Wayland build is then skipped as "already have", silently leaving the stock
@@ -648,33 +648,33 @@ def main() -> None:
     if "linux-wayland" in targets and "linux-x64" in targets:
         targets.remove("linux-x64")
         print("  Note: linux-wayland supersedes the linux-x64 download (shared lib "
-              "file) — skipping the plain download.\n")
+              "file) - skipping the plain download.\n")
     # Same story for Windows: the NDEBUG from-source build and the mingw download
     # write the same runtimes/win-x64/native/raylib.dll. If both are requested the
     # download would run first and the build would then skip as "already have",
-    # silently leaving the asserts-enabled stock DLL in place — so drop it.
+    # silently leaving the asserts-enabled stock DLL in place - so drop it.
     if "win-x64-ndebug" in targets and "win-x64" in targets:
         targets.remove("win-x64")
         print("  Note: win-x64-ndebug supersedes the win-x64 download (shared lib "
-              "file) — skipping the plain download.\n")
+              "file) - skipping the plain download.\n")
 
-    # ── provision each target ─────────────────────────────────────────────────
+    # -- provision each target -------------------------------------------------
     for name in targets:
         cfg      = ALL_TARGETS[name]
         dest     = cfg["dest"]
         sentinel = cfg.get("sentinel")
 
-        bar = "─" * max(1, 60 - len(name))
-        print(f"── [{name}] {bar}")
+        bar = "-" * max(1, 60 - len(name))
+        print(f"-- [{name}] {bar}")
 
         # "Already have" must also see any required sentinel: a bare libraylib.so
         # with no .wayland-enabled is a leftover stock download, not the Wayland
-        # build we want here — so let it (re)build rather than skipping.
+        # build we want here - so let it (re)build rather than skipping.
         have = dest.exists() and (sentinel is None or sentinel.exists())
         if have and not args.rebuild:
             size = dest.stat().st_size // 1024
             print(f"  Already have: {dest.relative_to(REPO_ROOT)} ({size} KB)"
-                  "  — pass --rebuild to force")
+                  "  - pass --rebuild to force")
             print()
             continue
 
@@ -694,12 +694,12 @@ def main() -> None:
             else:
                 provision_download(name, cfg, tag, assets)
             if backup:
-                backup.unlink(missing_ok=True)          # success — drop the backup
+                backup.unlink(missing_ok=True)          # success - drop the backup
         except Exception as exc:
             print(f"\n  ERROR: {exc}", file=sys.stderr)
             if backup and backup.exists():
                 backup.replace(dest)                    # restore previous good lib
-                print("  (kept the previous library — the failed build did not "
+                print("  (kept the previous library - the failed build did not "
                       "delete it)", file=sys.stderr)
             else:
                 dest.unlink(missing_ok=True)

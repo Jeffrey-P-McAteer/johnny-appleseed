@@ -6,17 +6,17 @@ namespace JohnnyAppleseed.Input;
 /// </summary>
 enum InputAction
 {
-    // ── navigation ───────────────────────────────────────────────────────────
+    // -- navigation -----------------------------------------------------------
     Up,
     Down,
     Left,
     Right,
 
-    // ── selection ────────────────────────────────────────────────────────────
+    // -- selection ------------------------------------------------------------
     Confirm,    // Enter / Space / Gamepad A (South)
     Cancel,     // Escape / Gamepad B (East)
 
-    // ── bumper shortcuts ─────────────────────────────────────────────────────
+    // -- bumper shortcuts -----------------------------------------------------
     // Mapped to LB / RB on a controller, Q / E on keyboard.
     // Used as single-key shortcuts to menus that would otherwise require
     // several arrow-key + Enter presses in keyboard-only mode.

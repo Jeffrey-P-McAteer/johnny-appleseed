@@ -7,7 +7,7 @@ namespace JohnnyAppleseed.Probe;
 /// Dumps the shared content database (items + characters) parsed from the
 /// embedded <c>story/*.jsonc</c> files, proving the comment-tolerant parse works
 /// and that greentext/descriptions load. Also runs a small <see cref="GameState"/>
-/// round-trip. Fully headless — reads embedded resources only, no window/audio.
+/// round-trip. Fully headless - reads embedded resources only, no window/audio.
 /// Exit code 0 = everything parsed and the state round-trip held.
 /// </summary>
 static class ContentProbe
@@ -46,7 +46,7 @@ static class ContentProbe
         gs.SetFlag("met_johnny");
         gs.Give("apple-seeds", 3);
         gs.Give("apple-seeds", 2);
-        gs.Take("apple-seeds", 1);       // → 4
+        gs.Take("apple-seeds", 1);       // -> 4
         gs.AddVar("stamina", 5);
         gs.MarkVisited("ohio_forest");
 

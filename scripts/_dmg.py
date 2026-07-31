@@ -3,16 +3,16 @@ Pure-Python Apple UDIF DMG creator with embedded HFS+ filesystem.
 
 Zero system dependencies beyond the Python standard library.
 
-────────────────────────────────────────────────────────────────────────────────
-APPLE DISK IMAGE (UDIF) FORMAT — GUIDANCE
-────────────────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------------------
+APPLE DISK IMAGE (UDIF) FORMAT - GUIDANCE
+--------------------------------------------------------------------------------
 
 A .dmg file created by hdiutil is an Apple Universal Disk Image Format (UDIF)
 file.  Its structure (verified against real hdiutil output):
 
   [data fork: compressed/raw sector data]
-  [XML plist — the blkx resource fork]
-  [512-byte koly block — the UDIF trailer]
+  [XML plist - the blkx resource fork]
+  [512-byte koly block - the UDIF trailer]
 
 KOLY BLOCK (512 bytes, at end of file):
   magic            "koly"  (4 bytes)
@@ -22,7 +22,7 @@ KOLY BLOCK (512 bytes, at end of file):
   runningDataOff   0       (unused)
   dataForkOffset   0       (data fork starts at byte 0)
   dataForkLength           (total bytes of compressed sector data)
-  rsrcForkOffset   0       (not used — we use xmlOffset instead)
+  rsrcForkOffset   0       (not used - we use xmlOffset instead)
   rsrcForkLength   0
   segmentNumber    1
   segmentCount     1
@@ -32,7 +32,7 @@ KOLY BLOCK (512 bytes, at end of file):
   xmlLength
   reserved         zeros (120 bytes)
   masterChecksum           (UDIFChecksum, 136 bytes: same type/value as dfChecksum)
-  imageVariant     1       (kUDIFDeviceImageType — device disk with partition table)
+  imageVariant     1       (kUDIFDeviceImageType - device disk with partition table)
   sectorCount              (total 512-byte sectors described by all blkx entries)
   reserved         zeros (12 bytes)
 
@@ -48,7 +48,7 @@ BLKX ENTRIES (inside the "blkx" list):
     Attributes  "0x0050"
     CFName      human-readable partition name
     Data        binary mish block (see below)
-    ID          partition index as string ("-1" for MBR, "0" for GPT header, …)
+    ID          partition index as string ("-1" for MBR, "0" for GPT header, ...)
     Name        same as CFName
 
 MISH BLOCK (binary, embedded in each blkx Data field):
@@ -75,11 +75,11 @@ MISH BLOCK (binary, embedded in each blkx Data field):
     compressedOffset byte offset of chunk data in the data fork
     compressedLength byte count of chunk in data fork (0 for IGNORE; sector*512 for RAW)
 
-GPT DISK LAYOUT (required — raw HFS+ without GPT causes "Invalid argument"):
+GPT DISK LAYOUT (required - raw HFS+ without GPT causes "Invalid argument"):
   LBA  0     : Protective MBR (type 0xEE, covers whole disk)
   LBA  1     : Primary GPT Header
-  LBA  2-33  : Primary GPT Partition Table (128 entries × 128 bytes = 32 sectors)
-  LBA 34-39  : Apple_Free gap (6 sectors) — aligns HFS+ to LBA 40
+  LBA  2-33  : Primary GPT Partition Table (128 entries x 128 bytes = 32 sectors)
+  LBA 34-39  : Apple_Free gap (6 sectors) - aligns HFS+ to LBA 40
   LBA 40-N   : HFS+ partition (our content)
   LBA N+1-N+6: Apple_Free gap (6 sectors)
   LBA N+7-N+38: Backup GPT Partition Table (32 sectors)
@@ -88,12 +88,12 @@ GPT DISK LAYOUT (required — raw HFS+ without GPT causes "Invalid argument"):
 HFS+ VOLUME HEADER within the partition:
   The HFS+ VolumeHeader is at byte offset 1024 WITHIN the partition
   (= 2 sectors from the partition start).  In the global disk image,
-  the VH is at byte (LBA_40 × 512 + 1024) = 20480 + 1024 = 21504.
+  the VH is at byte (LBA_40 x 512 + 1024) = 20480 + 1024 = 21504.
   The Alternate VH is at image_size - 1024 (second-to-last 512-byte sector).
 
-────────────────────────────────────────────────────────────────────────────────
-DMG BACKGROUND IMAGE — APPLE GUIDANCE
-────────────────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------------------
+DMG BACKGROUND IMAGE - APPLE GUIDANCE
+--------------------------------------------------------------------------------
 
 To show a custom background when a user opens the DMG in Finder:
 
@@ -135,7 +135,7 @@ To show a custom background when a user opens the DMG in Finder:
    creator='rhsf', data=target path).  Finder renders it as a folder alias
    pointing to /Applications.
 
-────────────────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------------------
 """
 
 from __future__ import annotations
@@ -151,14 +151,14 @@ import zlib
 import plistlib
 from pathlib import Path
 
-# ── geometry ───────────────────────────────────────────────────────────────────
+# -- geometry -------------------------------------------------------------------
 
 BLOCK = 4096    # HFS+ allocation block size and B-tree node size
 
 # GPT disk layout constants (sector = 512 bytes)
 _MBR_SECTORS        = 1
 _GPT_HDR_SECTORS    = 1
-_GPT_TABLE_SECTORS  = 32   # 128 GPT entries × 128 bytes = 16 384 bytes
+_GPT_TABLE_SECTORS  = 32   # 128 GPT entries x 128 bytes = 16 384 bytes
 _GAP_SECTORS        = 6    # Apple_Free padding before and after HFS+
 # HFS+ partition starts at LBA 40 (= 1+1+32+6)
 HFS_START_LBA = _MBR_SECTORS + _GPT_HDR_SECTORS + _GPT_TABLE_SECTORS + _GAP_SECTORS
@@ -176,7 +176,7 @@ def _hfs_now() -> int:
     return int(time.time()) + _HFS_EPOCH
 
 
-# ── verified struct sizes ───────────────────────────────────────────────────────
+# -- verified struct sizes -------------------------------------------------------
 
 def _vsz(fmt: str, expected: int) -> str:
     got = struct.calcsize(fmt)
@@ -190,7 +190,7 @@ _BSD_FMT   = _vsz(">II BBH I",     16)    # HFSPlusBSDInfo
 _TAIL_FMT  = _vsz(">II",            8)    # textEncoding + reserved
 
 
-# ── HFS+ struct helpers ────────────────────────────────────────────────────────
+# -- HFS+ struct helpers --------------------------------------------------------
 
 def _unistr(name: str) -> bytes:
     return struct.pack(">H", len(name)) + name.encode("utf-16-be")
@@ -232,11 +232,11 @@ def _file_rec(cnid: int, data_size: int, start: int, count: int, now: int,
 def _thread_rec(rtype: int, parent: int, name: str) -> bytes:
     return struct.pack(">hHHI", rtype, 0, 0, parent) + _unistr(name)
 
-_SLNK_TYPE    = 0x736C6E6B   # 'slnk' — HFS+ symlink file type
-_SLNK_CREATOR = 0x72687366   # 'rhsf' — HFS+ symlink creator
+_SLNK_TYPE    = 0x736C6E6B   # 'slnk' - HFS+ symlink file type
+_SLNK_CREATOR = 0x72687366   # 'rhsf' - HFS+ symlink creator
 
 
-# ── B-tree ─────────────────────────────────────────────────────────────────────
+# -- B-tree ---------------------------------------------------------------------
 
 def _leaf_node(flink: int, blink: int, records: list[bytes]) -> bytes:
     desc = struct.pack(_NODE_FMT, flink, blink, -1, 1, len(records), 0)
@@ -310,7 +310,7 @@ def _build_catalog(pairs: list[tuple[bytes, bytes]]) -> bytes:
     return head + b"".join(leaf_bytes)
 
 
-# ── HFS+ volume header ─────────────────────────────────────────────────────────
+# -- HFS+ volume header ---------------------------------------------------------
 
 def _volume_header(total_blocks: int, free_blocks: int,
                    file_count: int, folder_count: int,
@@ -321,7 +321,7 @@ def _volume_header(total_blocks: int, free_blocks: int,
     scalar = struct.pack(
         _VH_FMT,
         0x482B, 0x0004,      # signature 'H+', version 4
-        (1 << 8),            # kHFSVolumeUnmountedMask — skip fsck on mount
+        (1 << 8),            # kHFSVolumeUnmountedMask - skip fsck on mount
         0x31302E30,          # lastMountedVersion '10.0'
         0,                   # journalInfoBlock (not journaled)
         now, now, 0, now,    # create, modify, backup, checked
@@ -345,7 +345,7 @@ def _volume_header(total_blocks: int, free_blocks: int,
     return vh
 
 
-# ── staging walker ─────────────────────────────────────────────────────────────
+# -- staging walker -------------------------------------------------------------
 
 class _Entry:
     __slots__ = ("kind", "parent", "name", "cnid", "mode", "data")
@@ -378,14 +378,14 @@ _CNID_BITMAP      = 5
 _CNID_FIRST_USER  = 16
 
 
-# ── HFS+ image builder ─────────────────────────────────────────────────────────
+# -- HFS+ image builder ---------------------------------------------------------
 
 def _build_hfs_image(staging: Path, label: str) -> bytes:
     """
     Return raw HFS+ partition bytes.
     The VolumeHeader is at byte 1024 and the Alternate VH at image_size - 1024.
     Both are required by macOS; the partition is placed at LBA 40 in the disk image
-    so the absolute positions in the UDIF data stream differ by 40 × 512 = 20 480.
+    so the absolute positions in the UDIF data stream differ by 40 x 512 = 20 480.
     """
     now = _hfs_now()
     ctr = [_CNID_FIRST_USER]
@@ -397,13 +397,13 @@ def _build_hfs_image(staging: Path, label: str) -> bytes:
     file_count   = len(files)
     folder_count = len(dirs) + 1   # +1 for root
 
-    # ── first pass: measure catalog size ──────────────────────────────────────
+    # -- first pass: measure catalog size --------------------------------------
     pairs = _make_catalog_pairs(entries, {}, label, now)
     cat0  = _build_catalog(pairs)
     cat_blocks = math.ceil(len(cat0) / BLOCK)
 
-    # Fixed block layout (alloc_blocks=1 covers ≤128 MB; ext_blocks=1):
-    #   [0: reserved+VH] [1: bitmap] [2: extents] [3..3+cat-1: catalog] [data…] [last: altVH]
+    # Fixed block layout (alloc_blocks=1 covers <=128 MB; ext_blocks=1):
+    #   [0: reserved+VH] [1: bitmap] [2: extents] [3..3+cat-1: catalog] [data...] [last: altVH]
     data_start = 3 + cat_blocks
     pos = data_start
     positions: dict[int, tuple[int, int]] = {}
@@ -415,12 +415,12 @@ def _build_hfs_image(staging: Path, label: str) -> bytes:
     total_blocks = pos + 1   # +1 for alternate VH block
     free_blocks  = 0         # distribution image is fully packed
 
-    # ── second pass: catalog with real block positions ─────────────────────────
+    # -- second pass: catalog with real block positions -------------------------
     pairs = _make_catalog_pairs(entries, positions, label, now)
     cat   = _build_catalog(pairs)
     assert math.ceil(len(cat) / BLOCK) == cat_blocks, "catalog size changed"
 
-    # ── allocation bitmap ─────────────────────────────────────────────────────
+    # -- allocation bitmap -----------------------------------------------------
     bmap_bytes = bytearray(math.ceil(total_blocks / 8))
     def _mark(b: int) -> None:
         bmap_bytes[b // 8] |= 0x80 >> (b % 8)
@@ -435,10 +435,10 @@ def _build_hfs_image(staging: Path, label: str) -> bytes:
             _mark(b)
     _mark(total_blocks - 1)  # alt VH block
 
-    # ── extents overflow B-tree (header-only, empty tree) ─────────────────────
+    # -- extents overflow B-tree (header-only, empty tree) ---------------------
     ext_tree = _header_node(1, 0, 0, 0, 0, 0, 0, 0)
 
-    # ── volume header ─────────────────────────────────────────────────────────
+    # -- volume header ---------------------------------------------------------
     vh = _volume_header(
         total_blocks, free_blocks, file_count, folder_count,
         now, next_cnid,
@@ -447,7 +447,7 @@ def _build_hfs_image(staging: Path, label: str) -> bytes:
         cat_start=3, cat_size=len(cat),
     )
 
-    # ── assemble image ────────────────────────────────────────────────────────
+    # -- assemble image --------------------------------------------------------
     img = bytearray(total_blocks * BLOCK)
 
     img[1024:1536] = vh                              # primary VH
@@ -466,7 +466,7 @@ def _build_hfs_image(staging: Path, label: str) -> bytes:
         if e.data:
             img[s * BLOCK:s * BLOCK + len(e.data)] = e.data
 
-    # Alternate VH at image_size − 1024 (second-to-last 512-byte sector)
+    # Alternate VH at image_size - 1024 (second-to-last 512-byte sector)
     img[len(img) - 1024:len(img) - 512] = vh
 
     return bytes(img)
@@ -507,7 +507,7 @@ def _make_catalog_pairs(
     return pairs
 
 
-# ── GPT disk structure ─────────────────────────────────────────────────────────
+# -- GPT disk structure ---------------------------------------------------------
 
 def _protective_mbr(total_lba: int) -> bytes:
     """
@@ -576,7 +576,7 @@ def _gpt_header(my_lba: int, alt_lba: int,
 
 def _build_gpt_table(hfs_start_lba: int, hfs_end_lba: int) -> bytes:
     """
-    Primary GPT partition table (32 sectors = 16 384 bytes, 128 entries × 128 bytes).
+    Primary GPT partition table (32 sectors = 16 384 bytes, 128 entries x 128 bytes).
     Entry 0: HFS+ partition covering [hfs_start_lba, hfs_end_lba].
     Entries 1-127: zeros (unused).
     """
@@ -591,7 +591,7 @@ def _build_gpt_table(hfs_start_lba: int, hfs_end_lba: int) -> bytes:
     return bytes(table)
 
 
-# ── mish block builder ─────────────────────────────────────────────────────────
+# -- mish block builder ---------------------------------------------------------
 
 def _mish(first_sec: int, sec_cnt: int, blk_desc: int,
           chunks: list[dict], raw_sector_bytes: bytes) -> bytes:
@@ -599,7 +599,7 @@ def _mish(first_sec: int, sec_cnt: int, blk_desc: int,
     Build a binary mish block for one GPT partition.
 
     chunks: list of dicts with keys type, sec, cnt, coff, clen
-      type  0x00000001 = RAW   (uncompressed, clen = cnt×512)
+      type  0x00000001 = RAW   (uncompressed, clen = cntx512)
             0x00000002 = IGNORE (all zeros, clen = 0)
             0xFFFFFFFF = END    (auto-appended by this function)
     raw_sector_bytes: the decompressed sector data for this partition
@@ -670,18 +670,18 @@ def _make_udif_plist(blkx: list[dict]) -> bytes:
     )
 
 
-# ── koly trailer ───────────────────────────────────────────────────────────────
+# -- koly trailer ---------------------------------------------------------------
 
 def _koly(data_fork_len: int, plist_offset: int, plist_len: int,
           total_sectors: int, df_crc: int, master_crc: int) -> bytes:
     """
     512-byte UDIF koly trailer block.
-    imageVariant = 1 (kUDIFDeviceImageType) — device disk image with GPT.
+    imageVariant = 1 (kUDIFDeviceImageType) - device disk image with GPT.
 
     dataForkChecksum  = CRC32 of the data fork bytes (compressed sector data).
     masterChecksum    = CRC32 of all per-partition mish checksums concatenated
                         as big-endian uint32s, in blkx order.
-                        Verified against two real hdiutil-produced DMGs. ✓
+                        Verified against two real hdiutil-produced DMGs. OK
     """
     def _ck(crc: int) -> bytes:
         # UDIFChecksum: type(4) + size_bits(4) + value(4) + zeros(124) = 136 bytes
@@ -706,7 +706,7 @@ def _koly(data_fork_len: int, plist_offset: int, plist_len: int,
     return koly
 
 
-# ── public entry point ─────────────────────────────────────────────────────────
+# -- public entry point ---------------------------------------------------------
 
 def build_dmg(staging: Path, output: Path, label: str) -> Path:
     """
@@ -731,12 +731,12 @@ def build_dmg(staging: Path, output: Path, label: str) -> Path:
     that Finder shows the custom background and icon layout when the
     DMG is opened.
     """
-    # ── 1. build the HFS+ partition image ────────────────────────────────────
+    # -- 1. build the HFS+ partition image ------------------------------------
     hfs = _build_hfs_image(staging, label)
     hfs_sectors = len(hfs) // 512
     assert len(hfs) % 512 == 0
 
-    # ── 2. calculate GPT geometry ─────────────────────────────────────────────
+    # -- 2. calculate GPT geometry ---------------------------------------------
     hfs_start = HFS_START_LBA                    # = 40
     hfs_end   = hfs_start + hfs_sectors - 1
 
@@ -750,7 +750,7 @@ def build_dmg(staging: Path, output: Path, label: str) -> Path:
     disk_guid     = uuid.uuid4().bytes_le
     last_usable   = total_sectors - _GPT_TABLE_SECTORS - _GPT_HDR_SECTORS - 1
 
-    # ── 3. GPT tables (primary and backup are identical content) ─────────────
+    # -- 3. GPT tables (primary and backup are identical content) -------------
     gpt_table    = _build_gpt_table(hfs_start, hfs_end)
     part_crc     = zlib.crc32(gpt_table) & 0xFFFFFFFF
 
@@ -769,7 +769,7 @@ def build_dmg(staging: Path, output: Path, label: str) -> Path:
     )
     mbr = _protective_mbr(total_sectors)
 
-    # ── 4. assemble the UDIF data fork ────────────────────────────────────────
+    # -- 4. assemble the UDIF data fork ----------------------------------------
     # Each RAW chunk contributes its bytes to the data fork.
     # IGNORE chunks have clen=0 and contribute no bytes.
     # The coff values track the running byte offset in the data fork.
@@ -793,7 +793,7 @@ def build_dmg(staging: Path, output: Path, label: str) -> Path:
     def _ignore_chunk(first_sec: int, sec_cnt: int,
                       blk_desc: int, name: str, entry_id: str) -> None:
         # IGNORE chunks store 0 bytes in the data fork (clen=0), so
-        # their mish checksum = CRC32(b"") = 0 — NOT CRC32 of zero bytes.
+        # their mish checksum = CRC32(b"") = 0 - NOT CRC32 of zero bytes.
         # Verified against hdiutil: "calculated CRC32 $00000000" for Apple_Free.
         chunk    = {"type": 0x00000002, "sec": 0, "cnt": sec_cnt, "coff": coff, "clen": 0}
         mish_data = _mish(first_sec, sec_cnt, blk_desc, [chunk], b"")
@@ -846,12 +846,12 @@ def build_dmg(staging: Path, output: Path, label: str) -> Path:
 
     # masterChecksum = CRC32 of all per-partition checksums concatenated as
     # big-endian uint32s (in blkx order).  Verified against two real hdiutil DMGs:
-    # - OpenJoystickDriver 0.4.1: computed 0x5d7b1dd2, stored 0x5d7b1dd2 ✓
-    # - Our DMG with corrected Apple_Free cks: computed 0xde745ae3 ✓
+    # - OpenJoystickDriver 0.4.1: computed 0x5d7b1dd2, stored 0x5d7b1dd2 OK
+    # - Our DMG with corrected Apple_Free cks: computed 0xde745ae3 OK
     ck_seq      = b"".join(struct.pack(">I", c) for c in partition_cks)
     master_crc  = zlib.crc32(ck_seq) & 0xFFFFFFFF
 
-    # ── 5. plist and koly ─────────────────────────────────────────────────────
+    # -- 5. plist and koly -----------------------------------------------------
     plist_bytes  = _make_udif_plist(blkx)
     plist_offset = len(data_fork)
     koly_block   = _koly(len(data_fork), plist_offset, len(plist_bytes),
@@ -862,7 +862,7 @@ def build_dmg(staging: Path, output: Path, label: str) -> Path:
     return output
 
 
-# ── Mac OS Alias blob for DS_Store background image ───────────────────────────
+# -- Mac OS Alias blob for DS_Store background image ---------------------------
 
 def make_background_alias(
     volume_label: str,
@@ -882,11 +882,11 @@ def make_background_alias(
     Returns None if mac_alias is unavailable (caller should fall back to color).
 
     Apple guidance on backgroundImageAlias:
-      • Type: binary data (Mac OS Alias resource)
-      • VolumeInfo must identify the HFS+ volume by name and creation date
-      • TargetInfo must provide the file's CNID (catalog node ID) so Finder
+      - Type: binary data (Mac OS Alias resource)
+      - VolumeInfo must identify the HFS+ volume by name and creation date
+      - TargetInfo must provide the file's CNID (catalog node ID) so Finder
         can find the file even if it has been renamed
-      • The posix_path field is a hint for resolution; CNID takes priority
+      - The posix_path field is a hint for resolution; CNID takes priority
     """
     try:
         from mac_alias import Alias, VolumeInfo, TargetInfo

@@ -1,5 +1,5 @@
-// ─────────────────────────────────────────────────────────────────────────────
-//  CHARACTER DEFINITIONS   (JSONC — // and /* */ comments are allowed)
+// -----------------------------------------------------------------------------
+//  CHARACTER DEFINITIONS   (JSONC - // and /* */ comments are allowed)
 //
 //  Defined once, shared by the story scene (portrait + name colour) and the
 //  future map/codex (the same "description"). Story files reference a speaker by
@@ -11,7 +11,7 @@
 //    description  shared biographical/codex text.
 //    portrait     embedded texture key (add art under graphics/portraits/).
 //    textColor    optional "#RRGGBB" for the speaker's name/dialogue tint.
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 [
   {
     "id": "johnny",

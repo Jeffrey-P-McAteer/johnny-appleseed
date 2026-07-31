@@ -6,8 +6,8 @@ namespace JohnnyAppleseed.Narrative;
 /// Ergonomic, intention-revealing accessor over the persisted <see cref="WorldState"/>.
 ///
 /// Scenes, minigames, and (later) the RPG map manipulate story state through this
-/// façade instead of poking the raw dictionaries, so the call sites read like the
-/// story does — <c>state.Give("apple-seeds", 3)</c>, <c>state.Flag("met_johnny")</c>,
+/// facade instead of poking the raw dictionaries, so the call sites read like the
+/// story does - <c>state.Give("apple-seeds", 3)</c>, <c>state.Flag("met_johnny")</c>,
 /// <c>if (state.Has("axe"))</c>. It wraps the same object that lives inside
 /// <see cref="SaveData"/>, so mutations are captured by the next
 /// <see cref="SaveSystem.Save"/>.
@@ -24,17 +24,17 @@ sealed class GameState
     /// <summary>Wrap the world state carried by a save document.</summary>
     public static GameState For(SaveData save) => new(save.World);
 
-    // ── flags ──────────────────────────────────────────────────────────────────
+    // -- flags ------------------------------------------------------------------
     public bool Flag(string id) => _w.Flags.TryGetValue(id, out bool v) && v;
     public void SetFlag(string id, bool value = true) => _w.Flags[id] = value;
     public void ClearFlag(string id) => _w.Flags.Remove(id);
 
-    // ── numeric variables (counters, scores, relationship values) ───────────────
+    // -- numeric variables (counters, scores, relationship values) ---------------
     public double Var(string id) => _w.Vars.TryGetValue(id, out double v) ? v : 0.0;
     public void SetVar(string id, double value) => _w.Vars[id] = value;
     public double AddVar(string id, double delta) => _w.Vars[id] = Var(id) + delta;
 
-    // ── inventory (item id → count) ─────────────────────────────────────────────
+    // -- inventory (item id -> count) ---------------------------------------------
     public int Count(string itemId) => _w.Inventory.TryGetValue(itemId, out int n) ? n : 0;
     public bool Has(string itemId, int atLeast = 1) => Count(itemId) >= atLeast;
 
@@ -55,7 +55,7 @@ sealed class GameState
         return taken;
     }
 
-    // ── visited nodes ───────────────────────────────────────────────────────────
+    // -- visited nodes -----------------------------------------------------------
     public bool HasVisited(string nodeId) => _w.Visited.Contains(nodeId);
     public void MarkVisited(string nodeId)
     {

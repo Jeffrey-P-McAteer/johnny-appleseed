@@ -15,7 +15,7 @@ namespace JohnnyAppleseed;
 /// <c>"audio/click.mp3"</c>.
 ///
 /// Raylib loads from memory (the same idiom ParallaxBackground already uses for
-/// its shader): bytes → <c>Load*FromMemory</c>. Textures are cached and released
+/// its shader): bytes -> <c>Load*FromMemory</c>. Textures are cached and released
 /// together via <see cref="UnloadAll"/>.
 /// </summary>
 static class Assets
@@ -24,7 +24,7 @@ static class Assets
     private static readonly Dictionary<string, Texture2D> _textures = new();
     private static readonly Dictionary<string, Sound> _sounds = new();
     // Music streams decode lazily, so raylib keeps a pointer into the source
-    // bytes — we pin them (GCHandle) for the stream's lifetime and free both in
+    // bytes - we pin them (GCHandle) for the stream's lifetime and free both in
     // UnloadAll. (Sounds, by contrast, are fully decoded up front, so their bytes
     // need no pinning.)
     private static readonly Dictionary<string, (Music music, GCHandle pin)> _music = new();
@@ -44,8 +44,8 @@ static class Assets
 
     /// <summary>
     /// Decode an embedded image into a Raylib <see cref="Image"/> (CPU-side).
-    /// Caller owns it — unload with <c>Raylib.UnloadImage</c>. The file extension
-    /// in <paramref name="key"/> tells Raylib the format (".png", ".jpg", …).
+    /// Caller owns it - unload with <c>Raylib.UnloadImage</c>. The file extension
+    /// in <paramref name="key"/> tells Raylib the format (".png", ".jpg", ...).
     /// </summary>
     public static Image LoadImage(string key) =>
         Raylib.LoadImageFromMemory(Path.GetExtension(key), Bytes(key));
@@ -69,7 +69,7 @@ static class Assets
     /// <summary>
     /// A playable sound for an embedded audio file, decoded on first use and
     /// cached. Requires the audio device to be initialised (Game.Run does this).
-    /// The extension in <paramref name="key"/> tells Raylib the format (".mp3", …).
+    /// The extension in <paramref name="key"/> tells Raylib the format (".mp3", ...).
     /// Do not unload the returned sound directly; call <see cref="UnloadAll"/>.
     /// </summary>
     public static Sound Sound(string key)
@@ -88,7 +88,7 @@ static class Assets
     /// A streamed music track for an embedded audio file, opened on first use and
     /// cached. Unlike <see cref="Sound"/> (fully decoded, good for short SFX),
     /// music is streamed, so the caller must pump it every frame via
-    /// <c>Raylib.UpdateMusicStream</c> — see <see cref="Audio.MusicManager"/>,
+    /// <c>Raylib.UpdateMusicStream</c> - see <see cref="Audio.MusicManager"/>,
     /// which does this and handles looping/cross-fading. Requires the audio device
     /// to be initialised. Do not unload the returned stream directly; call
     /// <see cref="UnloadAll"/>.

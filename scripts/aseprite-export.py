@@ -4,18 +4,18 @@
 # dependencies = []
 # ///
 """
-Johnny Appleseed — build-time Aseprite → PNG/GIF exporter.
+Johnny Appleseed - build-time Aseprite -> PNG/GIF exporter.
 
 Rasterises every `*.aseprite` under graphics/ into game-loadable images that the
 csproj then embeds (key "graphics/<path>.png" / ".gif"). The raw `.aseprite`
-source is NOT shipped (the csproj Removes it from the embed glob) — these
+source is NOT shipped (the csproj Removes it from the embed glob) - these
 generated files are.
 
 Frame-count rule (read straight from the documented .aseprite header, no tool
 needed just to branch):
-    • 1 frame   → export BOTH .png and .gif (a static image); the runtime picks
+    - 1 frame   -> export BOTH .png and .gif (a static image); the runtime picks
                   whichever suits the moment (crisp PNG vs. GIF path).
-    • >1 frame  → export ONLY .gif (an animated sprite); a single flat .png can't
+    - >1 frame  -> export ONLY .gif (an animated sprite); a single flat .png can't
                   represent multiple frames.
 
 The actual raster export needs the real Aseprite binary (proprietary format), which
@@ -26,7 +26,7 @@ default: if that binary isn't built yet, we print a notice and exit 0 so a norma
 regenerates automatically on every build thereafter.
 
 Usage
-─────
+-----
     uv run scripts/aseprite-export.py --graphics-dir graphics --outdir obj/aseprite
     uv run scripts/aseprite-export.py --ensure-build      # build Aseprite if missing, then export
     uv run scripts/aseprite-export.py --force             # re-export even if outputs are fresh
@@ -85,7 +85,7 @@ def ensure_binary(ensure_build: bool) -> Path | None:
              "skipping art export.")
         note("Build it once with:  uv run scripts/run-aseprite.py --no-run")
         return None
-    note("Aseprite binary missing — building it (uv run scripts/run-aseprite.py --no-run) …")
+    note("Aseprite binary missing - building it (uv run scripts/run-aseprite.py --no-run) ...")
     if subprocess.run(["uv", "run", str(RUN_ASEPRITE), "--no-run"]).returncode != 0 \
             or not ASEPRITE_BIN.exists():
         note("ERROR: Aseprite build failed.")
@@ -102,8 +102,8 @@ def export_one(binary: Path, src: Path, out_base: Path, force: bool) -> tuple[in
     outs = [out_base.with_suffix(ext) for ext in outputs_for(frames)]
 
     if not force and is_fresh(src, outs):
-        print(f"  ✓ up-to-date: {src.name}  ({frames} frame{'s' if frames != 1 else ''} "
-              f"→ {', '.join(o.suffix for o in outs)})")
+        print(f"  OK up-to-date: {src.name}  ({frames} frame{'s' if frames != 1 else ''} "
+              f"-> {', '.join(o.suffix for o in outs)})")
         return frames, False
 
     out_base.parent.mkdir(parents=True, exist_ok=True)
@@ -117,13 +117,13 @@ def export_one(binary: Path, src: Path, out_base: Path, force: bool) -> tuple[in
         raise RuntimeError(f"aseprite export failed for {src}")
 
     kind = "animated" if frames > 1 else "static"
-    print(f"  ✓ {src.name}  → {kind}: {', '.join(o.name for o in outs)}")
+    print(f"  OK {src.name}  -> {kind}: {', '.join(o.name for o in outs)}")
     return frames, True
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(
-        description="Export graphics/**/*.aseprite → embeddable .png/.gif.",
+        description="Export graphics/**/*.aseprite -> embeddable .png/.gif.",
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("files", nargs="*", type=Path,
                     help="Explicit .aseprite files (default: scan --graphics-dir).")
@@ -142,20 +142,20 @@ def main() -> int:
         sources = [(f, f.parent) for f in args.files]
     else:
         if not args.graphics_dir.exists():
-            note(f"no graphics dir: {args.graphics_dir} — nothing to do.")
+            note(f"no graphics dir: {args.graphics_dir} - nothing to do.")
             return 0
         sources = [(f, args.graphics_dir)
                    for f in sorted(args.graphics_dir.rglob("*.aseprite"))]
 
     if not sources:
-        note("no .aseprite files found — nothing to do.")
+        note("no .aseprite files found - nothing to do.")
         return 0
 
     binary = ensure_binary(args.ensure_build)
     if binary is None:
         return 0  # best-effort: absence of the editor is not a build failure
 
-    print(f"[aseprite-export] {len(sources)} file(s) → {args.outdir}")
+    print(f"[aseprite-export] {len(sources)} file(s) -> {args.outdir}")
     exported = skipped = 0
     for src, base in sources:
         try:

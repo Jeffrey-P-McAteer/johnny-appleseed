@@ -6,9 +6,9 @@ namespace JohnnyAppleseed.Save;
 /// Reads and writes the single auto-save slot as JSON in the app-data folder.
 ///
 /// Design goals:
-///   • Atomic writes — never leave a half-written save if the process dies mid-save.
-///   • Corruption-tolerant — a damaged file is set aside (.bak) rather than crashing.
-///   • Version-tolerant — older documents are migrated up to the current schema.
+///   - Atomic writes - never leave a half-written save if the process dies mid-save.
+///   - Corruption-tolerant - a damaged file is set aside (.bak) rather than crashing.
+///   - Version-tolerant - older documents are migrated up to the current schema.
 ///
 /// The save path is overridable (<see cref="SavePath"/>) so tests can run against
 /// a temp file without touching the user's real save.
@@ -87,7 +87,7 @@ static class SaveSystem
             File.Delete(_savePath);
     }
 
-    // ── migration ───────────────────────────────────────────────────────────
+    // -- migration -----------------------------------------------------------
 
     /// <summary>
     /// Upgrade an older document in place to <see cref="CurrentFormatVersion"/>.
@@ -98,14 +98,14 @@ static class SaveSystem
     private static void Migrate(SaveData data)
     {
         // Newer-than-known save (written by a future build): leave its extra data
-        // intact and just treat it as current — do not downgrade the number, or a
+        // intact and just treat it as current - do not downgrade the number, or a
         // later save from this build would silently strip fields we don't model.
         if (data.FormatVersion >= CurrentFormatVersion)
             return;
 
         switch (data.FormatVersion)
         {
-            // case 0: ...transform v0 → v1...; data.FormatVersion = 1; goto case 1;
+            // case 0: ...transform v0 -> v1...; data.FormatVersion = 1; goto case 1;
             default:
                 break;
         }

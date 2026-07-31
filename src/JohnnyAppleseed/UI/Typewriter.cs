@@ -6,7 +6,7 @@ namespace JohnnyAppleseed.UI;
 /// The reveal is paced by <see cref="CharsPerSecond"/>, with longer pauses after
 /// sentence- and clause-ending punctuation so the cadence reads naturally rather
 /// than mechanically. Operating on the raw (un-wrapped) text means the caller can
-/// re-wrap the visible substring every frame — the reveal survives window resizes.
+/// re-wrap the visible substring every frame - the reveal survives window resizes.
 /// </summary>
 sealed class Typewriter
 {
@@ -60,8 +60,8 @@ sealed class Typewriter
         return c switch
         {
             '\n'                              => baseDelay * 0.25f, // newlines feel instant
-            '.' or '!' or '?'                 => baseDelay * 9f,    // full stop — long beat
-            ',' or ';' or ':' or '—'     => baseDelay * 4f,    // comma / em-dash — short beat
+            '.' or '!' or '?'                 => baseDelay * 9f,    // full stop - long beat
+            ',' or ';' or ':'                 => baseDelay * 4f,    // comma - short beat
             _                                 => baseDelay,
         };
     }

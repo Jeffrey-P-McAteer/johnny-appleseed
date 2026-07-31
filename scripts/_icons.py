@@ -6,24 +6,24 @@
 # ]
 # ///
 """
-Johnny Appleseed — icon builder.
+Johnny Appleseed - icon builder.
 
 Rasterises a source SVG into the raster formats each platform's build pipeline
 needs to embed an application / window icon:
 
-    icon.png    → embedded resource, used at runtime via Raylib.SetWindowIcon
+    icon.png    -> embedded resource, used at runtime via Raylib.SetWindowIcon
                   (window title bar on Windows + X11)
-    icon.ico    → <ApplicationIcon> — stamped into the Windows apphost .exe
-    AppIcon.icns→ copied into JohnnyAppleseed.app/Contents/Resources (Finder/Dock)
+    icon.ico    -> <ApplicationIcon> - stamped into the Windows apphost .exe
+    AppIcon.icns-> copied into JohnnyAppleseed.app/Contents/Resources (Finder/Dock)
 
 Design notes
-────────────
+------------
 Raylib cannot load SVG, so the vector source must be rasterised ahead of time.
 Rather than pull in a heavy native SVG stack (cairo/librsvg), this module ships a
 small, dependency-free rasteriser for the *linear* SVG path subset
-(M/m L/l H/h V/v Z/z) — which is all a pixel-art icon needs — and fills the
+(M/m L/l H/h V/v Z/z) - which is all a pixel-art icon needs - and fills the
 resulting polygons with Pillow (already a packaging dependency).  Because the
-source grid (e.g. 14×16) divides evenly into every icon size we emit, the scaled
+source grid (e.g. 14x16) divides evenly into every icon size we emit, the scaled
 blocks land on exact pixel boundaries and stay crisp at every resolution.
 
 This mirrors scripts/_dmg.py: reverse-implement just enough of a format in pure
@@ -44,7 +44,7 @@ import struct
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-# ── SVG parsing ─────────────────────────────────────────────────────────────────
+# -- SVG parsing -----------------------------------------------------------------
 
 _NUM = re.compile(r"[-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?")
 _CMDS = "MmLlHhVvZzCcSsQqTtAa"
@@ -68,7 +68,7 @@ def _parse_color(value: str | None):
             h = "".join(c * 2 for c in h)
         if len(h) >= 6:
             return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-    # Unknown colour keyword — fall back to opaque black rather than crash.
+    # Unknown colour keyword - fall back to opaque black rather than crash.
     return (0, 0, 0)
 
 
@@ -188,10 +188,10 @@ def load_svg(path: str | Path):
     return paths, (min_x, min_y, w, h)
 
 
-# ── rasterisation ───────────────────────────────────────────────────────────────
+# -- rasterisation ---------------------------------------------------------------
 
 def rasterize(paths, viewbox, size: int):
-    """Render parsed paths into a `size`×`size` RGBA Pillow image, aspect-preserved."""
+    """Render parsed paths into a `size`x`size` RGBA Pillow image, aspect-preserved."""
     from PIL import Image, ImageDraw
 
     min_x, min_y, w, h = viewbox
@@ -213,7 +213,7 @@ def rasterize(paths, viewbox, size: int):
             if len(pts) == 2:
                 draw.line(pts, fill=color)
             else:
-                draw.polygon(pts, fill=color)  # aliased fill → crisp pixel edges
+                draw.polygon(pts, fill=color)  # aliased fill -> crisp pixel edges
 
     return img
 
@@ -229,7 +229,7 @@ def _png_bytes(img) -> bytes:
     return buf.getvalue()
 
 
-# ── format writers ──────────────────────────────────────────────────────────────
+# -- format writers --------------------------------------------------------------
 
 def write_png(svg: str | Path, out: Path, size: int = 256) -> Path:
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -252,7 +252,7 @@ def write_icns(svg: str | Path, out: Path) -> Path:
 
     macOS 10.7+ accepts PNG data for these OSTypes.  Writing the container
     directly (rather than via Pillow's ICNS encoder) keeps every size crisp and
-    avoids encoder-version quirks — same philosophy as scripts/_dmg.py.
+    avoids encoder-version quirks - same philosophy as scripts/_dmg.py.
     """
     entries = [
         (b"icp4", 16), (b"icp5", 32), (b"ic07", 128),
@@ -268,7 +268,7 @@ def write_icns(svg: str | Path, out: Path) -> Path:
     return out
 
 
-# ── CLI ─────────────────────────────────────────────────────────────────────────
+# -- CLI -------------------------------------------------------------------------
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Rasterise an SVG into icon formats")
@@ -280,11 +280,11 @@ def main() -> None:
     args = ap.parse_args()
 
     if args.png:
-        print(f"  icon → {write_png(args.svg, Path(args.png), args.png_size)}")
+        print(f"  icon -> {write_png(args.svg, Path(args.png), args.png_size)}")
     if args.ico:
-        print(f"  icon → {write_ico(args.svg, Path(args.ico))}")
+        print(f"  icon -> {write_ico(args.svg, Path(args.ico))}")
     if args.icns:
-        print(f"  icon → {write_icns(args.svg, Path(args.icns))}")
+        print(f"  icon -> {write_icns(args.svg, Path(args.icns))}")
 
 
 if __name__ == "__main__":

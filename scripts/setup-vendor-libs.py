@@ -18,14 +18,14 @@ build serves every target (win/linux/mac, x64/arm64). If a native source dep is
 added later, it would build per-RID here the way setup-native-libs.py does.
 
 Currently managed
-─────────────────
-  ink   inkle's ink narrative engine — runtime + compiler (MIT). Fetched from the
+-----------------
+  ink   inkle's ink narrative engine - runtime + compiler (MIT). Fetched from the
         latest GitHub release source tarball and built to netstandard2.0 DLLs the
         game references via HintPath (see JohnnyAppleseed.csproj). NuGet is not
         usable: nuget.org only carries a stale 2017 runtime and no compiler.
 
 Usage
-─────
+-----
     uv run scripts/setup-vendor-libs.py            # all deps
     uv run scripts/setup-vendor-libs.py ink        # one dep
     uv run scripts/setup-vendor-libs.py --rebuild  # force re-download + rebuild
@@ -46,7 +46,7 @@ from pathlib import Path
 
 import requests
 
-# ── paths ────────────────────────────────────────────────────────────────────
+# -- paths --------------------------------------------------------------------
 REPO_ROOT  = Path(__file__).resolve().parent.parent
 BUILD_DIR  = REPO_ROOT / "build"
 VENDOR_DIR = BUILD_DIR / "vendor"       # gitignored (build/ is in .gitignore)
@@ -55,7 +55,7 @@ CACHE_DIR  = BUILD_DIR / "cache"
 GITHUB_LATEST = "https://api.github.com/repos/{repo}/releases/latest"
 SOURCE_TARBALL = "https://github.com/{repo}/archive/refs/tags/{tag}.tar.gz"
 
-# ── dependency registry ──────────────────────────────────────────────────────
+# -- dependency registry ------------------------------------------------------
 #   repo          GitHub owner/name; the latest release tag is fuzzy-resolved.
 #   build_project project to build (its ProjectReferences are built too).
 #   tfm           target framework whose output DLLs we collect.
@@ -76,14 +76,14 @@ VENDOR_DEPS: dict[str, dict] = {
 }
 
 
-# ── helpers ──────────────────────────────────────────────────────────────────
+# -- helpers ------------------------------------------------------------------
 def die(msg: str) -> None:
     print(f"ERROR: {msg}", file=sys.stderr)
     sys.exit(1)
 
 
 def fetch_latest_tag(repo: str) -> str:
-    print(f"  querying GitHub for the latest {repo} release …")
+    print(f"  querying GitHub for the latest {repo} release ...")
     r = requests.get(GITHUB_LATEST.format(repo=repo), timeout=30,
                      headers={"Accept": "application/vnd.github.v3+json"})
     r.raise_for_status()
@@ -97,7 +97,7 @@ def download(url: str, dest: Path, desc: str) -> Path:
     if dest.exists() and dest.stat().st_size > 0:
         print(f"  cached: {dest.name}")
         return dest
-    print(f"  downloading {desc} …")
+    print(f"  downloading {desc} ...")
     r = requests.get(url, stream=True, timeout=300)
     r.raise_for_status()
     with open(dest, "wb") as f:
@@ -125,12 +125,12 @@ def apply_patch(src_root: Path, patch: tuple[str, str, str]) -> None:
     rel, old, new = patch
     f = src_root / rel
     if not f.exists():
-        print(f"  note: patch target {rel} not found — skipping (upstream may have changed)")
+        print(f"  note: patch target {rel} not found - skipping (upstream may have changed)")
         return
     text = f.read_text()
     if old in text:
         f.write_text(text.replace(old, new))
-        print(f"  patched {rel}: '{old}' → '{new}'")
+        print(f"  patched {rel}: '{old}' -> '{new}'")
 
 
 def build_project(src_root: Path, project: str) -> None:
@@ -169,14 +169,14 @@ def collect_artifacts(src_root: Path, artifacts: list[str], tfm: str, dest: Path
             die(f"built artifact not found after build: {name}")
         shutil.copy2(candidates[0], dest / name)
         size = (dest / name).stat().st_size // 1024
-        print(f"  ✓ {dest.relative_to(REPO_ROOT)}/{name}  ({size} KB)")
+        print(f"  OK {dest.relative_to(REPO_ROOT)}/{name}  ({size} KB)")
 
 
 def provision(name: str, cfg: dict, rebuild: bool) -> None:
     dest: Path = cfg["dest"]
     marker = dest / cfg["artifacts"][-1]
     if marker.exists() and not rebuild:
-        print(f"  already built: {dest.relative_to(REPO_ROOT)}  — pass --rebuild to force")
+        print(f"  already built: {dest.relative_to(REPO_ROOT)}  - pass --rebuild to force")
         return
 
     tag = fetch_latest_tag(cfg["repo"])
@@ -187,7 +187,7 @@ def provision(name: str, cfg: dict, rebuild: bool) -> None:
     collect_artifacts(src_root, cfg["artifacts"], cfg["tfm"], dest)
 
 
-# ── main ─────────────────────────────────────────────────────────────────────
+# -- main ---------------------------------------------------------------------
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Fetch + build vendored source dependencies into build/ (gitignored).",
@@ -208,7 +208,7 @@ def main() -> None:
 
     os.chdir(REPO_ROOT)
     for name in args.deps:
-        print(f"── [{name}] " + "─" * max(1, 56 - len(name)))
+        print(f"-- [{name}] " + "-" * max(1, 56 - len(name)))
         provision(name, VENDOR_DEPS[name], args.rebuild)
         print()
 

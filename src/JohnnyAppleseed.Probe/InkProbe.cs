@@ -44,7 +44,7 @@ You shoulder the sack and walk on.
             return 1;
         }
 
-        Console.WriteLine("── first beat ──");
+        Console.WriteLine("-- first beat --");
         while (runner.CanContinue)
         {
             string line = runner.Continue(out IReadOnlyList<string> tags);
@@ -58,11 +58,11 @@ You shoulder the sack and walk on.
             Console.Error.WriteLine($"expected 2 choices, got {runner.ChoiceCount}");
             return 1;
         }
-        Console.WriteLine("── choices ──");
+        Console.WriteLine("-- choices --");
         for (int i = 0; i < runner.ChoiceCount; i++)
             Console.WriteLine($"  [{i}] {runner.ChoiceText(i)}");
 
-        Console.WriteLine("── choosing 0 (plant) ──");
+        Console.WriteLine("-- choosing 0 (plant) --");
         runner.Choose(0);
         while (runner.CanContinue)
             Console.WriteLine($"  {runner.Continue(out _)}");

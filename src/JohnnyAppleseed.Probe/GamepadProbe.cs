@@ -5,7 +5,7 @@ using JohnnyAppleseed.Input;
 namespace JohnnyAppleseed.Probe;
 
 /// <summary>
-/// raylib-level gamepad measurement — reports the controller exactly as the game's
+/// raylib-level gamepad measurement - reports the controller exactly as the game's
 /// stack (Raylib + GLFW) sees it. The button "codes" printed here are Raylib's
 /// <see cref="GamepadButton"/> values, i.e. the very numbers the game maps its
 /// actions against. For kernel-level codes use the <c>raw</c> mode instead.
@@ -21,7 +21,7 @@ static class GamepadProbe
 
     private static readonly GamepadAxis[] Axes = Enum.GetValues<GamepadAxis>();
 
-    // ── list mode ─────────────────────────────────────────────────────────────
+    // -- list mode -------------------------------------------------------------
 
     public static int List()
     {
@@ -55,7 +55,7 @@ static class GamepadProbe
         return 0;
     }
 
-    // ── interactive mode ──────────────────────────────────────────────────────
+    // -- interactive mode ------------------------------------------------------
 
     public static int Interactive()
     {
@@ -64,7 +64,7 @@ static class GamepadProbe
 
         Raylib.SetTraceLogLevel(TraceLogLevel.Warning);
         Raylib.SetConfigFlags(ConfigFlags.ResizableWindow | ConfigFlags.VSyncHint);
-        Raylib.InitWindow(960, 640, "Johnny Appleseed — gamepad probe");
+        Raylib.InitWindow(960, 640, "Johnny Appleseed - gamepad probe");
         Raylib.SetTargetFPS(60);
         InputSystem.Initialize();
 
@@ -147,7 +147,7 @@ static class GamepadProbe
         Console.WriteLine();
     }
 
-    // ── on-screen live view ────────────────────────────────────────────────────
+    // -- on-screen live view ----------------------------------------------------
 
     private static void DrawState()
     {
@@ -178,7 +178,7 @@ static class GamepadProbe
         {
             bool held = InputSystem.IsDown(a);
             Raylib.DrawText($"  {a}", 16, y, 18, held ? green : dim);
-            if (held) Raylib.DrawText("●", 180, y, 18, green);
+            if (held) Raylib.DrawText("*", 180, y, 18, green);
             y += 22;
         }
 
@@ -193,7 +193,7 @@ static class GamepadProbe
             // Show how the game's InputSystem sees this slot: the rolling 30s event
             // count that drives selection, and whether it is the chosen active pad.
             bool isActive = InputSystem.ActiveGamepad == slot;
-            string tag = isActive ? "  ← ACTIVE" : "";
+            string tag = isActive ? "  <- ACTIVE" : "";
             Line($"  gp{slot}: {Raylib.GetGamepadName_(slot)}   " +
                  $"[events/30s: {InputSystem.RecentEventCount(slot)}]{tag}",
                  isActive ? green : white, 18);
@@ -210,7 +210,7 @@ static class GamepadProbe
             }
         }
         if (!any)
-            Line("  (plug one in — it will appear here live)", dim, 18);
+            Line("  (plug one in - it will appear here live)", dim, 18);
     }
 
     private static void DrawAxisBar(string label, float v, int x, int y)

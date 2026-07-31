@@ -6,18 +6,18 @@ namespace JohnnyAppleseed.Save;
 /// <summary>
 /// Root save-game document.
 ///
-/// ── Forward/backward compatibility contract ─────────────────────────────────
+/// -- Forward/backward compatibility contract ---------------------------------
 /// This type is intentionally designed so the format can grow without breaking
 /// existing saves in either direction:
 ///
-///   • Adding a field  — old saves simply lack it and deserialize to the field's
+///   - Adding a field  - old saves simply lack it and deserialize to the field's
 ///     default; new saves written by a newer build carry it forward.
-///   • Removing a field — System.Text.Json ignores JSON members with no matching
+///   - Removing a field - System.Text.Json ignores JSON members with no matching
 ///     property, so stale fields don't throw.
-///   • A newer build's save loaded by an older build — unknown members are
+///   - A newer build's save loaded by an older build - unknown members are
 ///     captured in <see cref="Extra"/> and re-serialized untouched, so a
 ///     round-trip through an older build never destroys newer data.
-///   • Breaking reshapes — bump <see cref="SaveSystem.CurrentFormatVersion"/>
+///   - Breaking reshapes - bump <see cref="SaveSystem.CurrentFormatVersion"/>
 ///     and add a step in SaveSystem.Migrate().
 ///
 /// Keep every property nullable-safe with a sensible default and NEVER reuse a
@@ -49,7 +49,7 @@ sealed class SaveData
 
     /// <summary>
     /// General branching-narrative state: story flags, numeric variables,
-    /// inventory, and visited nodes. Purely additive — old saves simply lack the
+    /// inventory, and visited nodes. Purely additive - old saves simply lack the
     /// "world" member and deserialize to an empty <see cref="WorldState"/>, so no
     /// format-version bump is required. See <see cref="Narrative.GameState"/> for
     /// the ergonomic accessor scenes should use.
@@ -58,7 +58,7 @@ sealed class SaveData
     public WorldState World { get; set; } = new();
 
     /// <summary>
-    /// Any JSON members not mapped to a property above — preserved verbatim so a
+    /// Any JSON members not mapped to a property above - preserved verbatim so a
     /// newer save opened (and re-saved) by an older build keeps its extra data.
     /// </summary>
     [JsonExtensionData]
@@ -94,7 +94,7 @@ static class Checkpoint
     public const string Overworld = "overworld"; // future: first playable scene
 }
 
-/// <summary>Placeholder for future player data (name, position, inventory…).</summary>
+/// <summary>Placeholder for future player data (name, position, inventory...).</summary>
 sealed class PlayerState
 {
     [JsonPropertyName("name")]
@@ -104,7 +104,7 @@ sealed class PlayerState
 /// <summary>
 /// The mutable world/progression state a branching story reads and writes:
 /// boolean <see cref="Flags"/>, numeric <see cref="Vars"/> (counters, minigame
-/// scores, relationship values), <see cref="Inventory"/> (item id → count), and
+/// scores, relationship values), <see cref="Inventory"/> (item id -> count), and
 /// the set of <see cref="Visited"/> node ids. Every collection defaults to empty
 /// so a save that predates a given field still loads cleanly.
 ///

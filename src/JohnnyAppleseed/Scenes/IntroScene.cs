@@ -14,11 +14,11 @@ namespace JohnnyAppleseed.Scenes;
 /// Narration is revealed with a typewriter effect inside a dialogue box. Every
 /// input device advances the story identically:
 ///
-///   • Confirm (Enter/Space, gamepad A), Right, ShortcutRight, or a left-click
-///     anywhere → if still typing, finish the line instantly; otherwise turn to
+///   - Confirm (Enter/Space, gamepad A), Right, ShortcutRight, or a left-click
+///     anywhere -> if still typing, finish the line instantly; otherwise turn to
 ///     the next page.
-///   • Left / ShortcutLeft → step back a page (re-reads the previous beat).
-///   • Cancel (Esc / gamepad B) → leave to the main menu; progress is kept.
+///   - Left / ShortcutLeft -> step back a page (re-reads the previous beat).
+///   - Cancel (Esc / gamepad B) -> leave to the main menu; progress is kept.
 ///
 /// Progress is written to the save file every time the page changes, so quitting
 /// mid-intro and returning resumes on the exact page the player left off.
@@ -33,9 +33,9 @@ sealed class IntroScene : IScene
 
     private int _page;
     private float _blink;        // cursor / prompt blink accumulator
-    private float _pageFade;     // 0→1 fade-in when a page opens
+    private float _pageFade;     // 0->1 fade-in when a page opens
 
-    // ── layout / palette ──────────────────────────────────────────────────────
+    // -- layout / palette ------------------------------------------------------
     private const int HeadingFontSize = 30;
     private const int BodyFontSize     = 24;
     private const int HintFontSize     = 16;
@@ -80,7 +80,7 @@ sealed class IntroScene : IScene
         if (_pageFade < 1f)
             _pageFade = MathF.Min(1f, _pageFade + dt * 3f);
 
-        // Leaving the intro — progress is already saved on every page turn.
+        // Leaving the intro - progress is already saved on every page turn.
         if (InputSystem.IsPressed(InputAction.Cancel))
             return new MainMenuScene();
 
@@ -125,7 +125,7 @@ sealed class IntroScene : IScene
         _bg.Dispose();
     }
 
-    // ── page flow ───────────────────────────────────────────────────────────
+    // -- page flow -----------------------------------------------------------
 
     private IScene? NextPage()
     {
@@ -165,7 +165,7 @@ sealed class IntroScene : IScene
         return data;
     }
 
-    // ── drawing ───────────────────────────────────────────────────────────────
+    // -- drawing ---------------------------------------------------------------
 
     private void DrawVignette()
     {
@@ -210,7 +210,7 @@ sealed class IntroScene : IScene
             y += 16;
         }
 
-        // body — wrap the revealed substring so the reveal survives window resizes
+        // body - wrap the revealed substring so the reveal survives window resizes
         string wrapped = TextWrap.Wrap(_typewriter.Visible, BodyFontSize, textWidth);
         DrawWrappedBody(wrapped, x, y, Fade(ColBody), Fade(ColShadow));
 
@@ -240,7 +240,7 @@ sealed class IntroScene : IScene
             return;
 
         bool last = _page + 1 >= _pages.Length;
-        string glyph = last ? "■" : "▼"; // ■ to end, ▼ to continue
+        string glyph = last ? "#" : "v"; // # to end, v to continue
         int size = 22;
         int gw = Raylib.MeasureText(glyph, size);
         Raylib.DrawText(glyph,
@@ -261,7 +261,7 @@ sealed class IntroScene : IScene
         // controls hint, centered below the box
         string hint = InputSystem.IsGamepadConnected
             ? "[ A ]  continue     [ B ]  menu     [ LB/RB ]  back / skip"
-            : "[ Click / Enter / Space ]  continue     [ Esc ]  menu     [ ← → ]  back / skip";
+            : "[ Click / Enter / Space ]  continue     [ Esc ]  menu     [ <- -> ]  back / skip";
         int hw = Raylib.MeasureText(hint, HintFontSize);
         int sw = Raylib.GetScreenWidth();
         int sh = Raylib.GetScreenHeight();

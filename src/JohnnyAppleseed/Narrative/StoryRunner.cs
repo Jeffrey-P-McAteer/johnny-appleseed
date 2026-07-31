@@ -1,4 +1,4 @@
-// Fully qualify Ink.Runtime.* — the vendored compiler assembly also exposes an
+// Fully qualify Ink.Runtime.* - the vendored compiler assembly also exposes an
 // Ink.Parsed.Story, so an unqualified `using Ink.Runtime` makes `Story` ambiguous.
 // Ink types are kept OUT of this class's public surface so that consumers (e.g.
 // the probe) don't need the ink assemblies referenced just to use StoryRunner.
@@ -9,7 +9,7 @@ namespace JohnnyAppleseed.Narrative;
 /// <summary>
 /// Thin wrapper around an ink <see cref="Story"/>: compiles authored <c>.ink</c>
 /// source, steps the narrative one line at a time, surfaces the per-line tags
-/// (<c># bg:</c>, <c># music:</c>, …) and the current choices, bridges variables
+/// (<c># bg:</c>, <c># music:</c>, ...) and the current choices, bridges variables
 /// to <see cref="GameState"/>, and (de)serializes runtime state for saves.
 ///
 /// We compile at runtime (via <see cref="Ink.Compiler"/>) rather than embedding
@@ -32,7 +32,7 @@ sealed class StoryRunner
     /// <summary>Number of choices offered at the current stopping point (may be 0).</summary>
     public int ChoiceCount => _story.currentChoices.Count;
 
-    /// <summary>No more narration and no choices — the story (or thread) is over.</summary>
+    /// <summary>No more narration and no choices - the story (or thread) is over.</summary>
     public bool IsEnded => !_story.canContinue && _story.currentChoices.Count == 0;
 
     /// <summary>Advance one line; returns its text and the tags attached to it.</summary>
@@ -43,7 +43,7 @@ sealed class StoryRunner
         return text;
     }
 
-    /// <summary>The last line produced by <see cref="Continue"/> — used to re-show
+    /// <summary>The last line produced by <see cref="Continue"/> - used to re-show
     /// the current beat after restoring saved state (without advancing).</summary>
     public string CurrentText => (_story.currentText ?? "").TrimEnd('\n', '\r', ' ');
 
@@ -54,11 +54,11 @@ sealed class StoryRunner
     public string ChoiceText(int index) => _story.currentChoices[index].text;
     public void Choose(int index) => _story.ChooseChoiceIndex(index);
 
-    // ── persistence ─────────────────────────────────────────────────────────────
+    // -- persistence -------------------------------------------------------------
     public string SaveState() => _story.state.ToJson();
     public void LoadState(string json) => _story.state.LoadJson(json);
 
-    // ── C# ↔ ink bridge (minigames, inventory queries, …) ───────────────────────
+    // -- C# <-> ink bridge (minigames, inventory queries, ...) -----------------------
     public void BindExternalFunction(string name, Func<object[], object?> fn, bool lookaheadSafe = false)
         => _story.BindExternalFunctionGeneral(name, args => fn(args)!, lookaheadSafe);
 

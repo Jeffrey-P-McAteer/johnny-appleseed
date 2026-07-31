@@ -23,7 +23,7 @@ The project is early. What exists today and plays end-to-end:
 - A **save system** that auto-saves your place in the intro, so `PLAY` becomes
   `CONTINUE` and drops you back exactly where you left off.
 
-There is no free-roaming gameplay scene yet — the intro currently returns you to
+There is no free-roaming gameplay scene yet - the intro currently returns you to
 the menu when it finishes. The rest of this document explains how the pieces fit
 together and where to add the next ones. It assumes you know C# but have never
 seen this codebase.
@@ -32,7 +32,7 @@ seen this codebase.
 
 - **Everything ships in one file.** The game is published as a single
   self-contained executable per platform. All art and audio are embedded
-  *inside* that binary as resources — there is no loose `assets/` folder next to
+  *inside* that binary as resources - there is no loose `assets/` folder next to
   the game at runtime. This shapes where you put new asset files (see
   [Adding assets](#adding-assets)).
 - **The game project is pure game logic.** All debug, measurement, and
@@ -49,10 +49,10 @@ seen this codebase.
 
 ### Requirements
 
-- **.NET 9 SDK** — `dotnet --version` should report 9.x
-- **[uv](https://docs.astral.sh/uv/)** — `uv --version`; runs the Python build
+- **.NET 9 SDK** - `dotnet --version` should report 9.x
+- **[uv](https://docs.astral.sh/uv/)** - `uv --version`; runs the Python build
   scripts, which declare their own inline dependencies (nothing to `pip install`)
-- **X11 development headers** — only needed for the `linux-arm64` cross-compile
+- **X11 development headers** - only needed for the `linux-arm64` cross-compile
   and the native-Wayland build; not required to run or package for `linux-x64`
 
 ### First: provision vendored dependencies
@@ -69,7 +69,7 @@ uv run scripts/setup-vendor-libs.py        # fetch + build all vendored deps (in
 Run this once after cloning (and again to pick up a newer ink release with
 `--rebuild`). If you skip it, the build stops with a message telling you to run
 it. The built DLLs are referenced by `HintPath` and bundled into the single-file
-publish. Managed deps like ink are platform-agnostic — one build serves every
+publish. Managed deps like ink are platform-agnostic - one build serves every
 target.
 
 ### Run it
@@ -79,7 +79,7 @@ dotnet run --project src/JohnnyAppleseed/JohnnyAppleseed.csproj
 ```
 
 A plain `dotnet build`/`dotnet run` (no runtime identifier) produces a
-framework-dependent build — quick to iterate on, and referenceable by the probe
+framework-dependent build - quick to iterate on, and referenceable by the probe
 project. Passing a runtime identifier (as the packaging script does) switches on
 single-file, self-contained publishing.
 
@@ -99,7 +99,7 @@ uv run scripts/package.py --skip-download  # skip the arm64 native-lib download
 
 | Target | Artifact |
 |---|---|
-| `linux-x64` | `dist/linux-x64/linux-x64` — raw self-contained executable |
+| `linux-x64` | `dist/linux-x64/linux-x64` - raw self-contained executable |
 | `linux-arm64` | `dist/linux-arm64/linux-arm64` |
 | `windows-x64` | `dist/windows-x64/windows-x64.zip` (contains the `.exe`) |
 | `windows-arm64` | `dist/windows-arm64/windows-arm64.zip` |
@@ -107,7 +107,7 @@ uv run scripts/package.py --skip-download  # skip the arm64 native-lib download
 | `macos-arm64` | `dist/macos-arm64/macos-arm64.dmg` |
 
 Generated intermediates (the build-info stamp, rasterized icons) go to `obj/`,
-which is gitignored — the build never creates new tracked folders for generated
+which is gitignored - the build never creates new tracked folders for generated
 files.
 
 ### About the two arm64 targets and Wayland
@@ -117,7 +117,7 @@ The managed C# cross-compiles to every platform cleanly. The catch is the
 natives only for `win-x64`, `linux-x64`, `osx-x64`, and `osx-arm64`.
 
 `scripts/setup-native-libs.py` fills the gaps without installing anything
-system-wide — it downloads Zig and Raylib source into `./build/` and produces the
+system-wide - it downloads Zig and Raylib source into `./build/` and produces the
 missing libraries:
 
 ```bash
@@ -136,8 +136,8 @@ the plain `win-x64` download.
 
 ### Graceful startup failures (`win-x64-ndebug`)
 
-If the graphics device can't initialize — most often **no compatible OpenGL 3.3
-driver**, common on virtual machines and remote desktops — the game surfaces a
+If the graphics device can't initialize - most often **no compatible OpenGL 3.3
+driver**, common on virtual machines and remote desktops - the game surfaces a
 native error dialog (`Platform/StartupError.cs`) instead of dying silently.
 `Game.Run` throws when `Raylib.IsWindowReady()` is false after `InitWindow`, and
 `Program.Main` routes that to the dialog.
@@ -166,24 +166,24 @@ device, the per-frame input pass, and a single "current scene." Each scene is
 responsible for its own logic and rendering and tells the loop what comes next.
 
 ```
-Program.cs   →  Game.Run()
-                 ├─ InitWindow / InitAudioDevice / InputSystem.Initialize
-                 └─ loop:  InputSystem.Update()
-                           next = scene.Update(dt)   ── returns a scene, or null
+Program.cs   ->  Game.Run()
+                 +- InitWindow / InitAudioDevice / InputSystem.Initialize
+                 +- loop:  InputSystem.Update()
+                           next = scene.Update(dt)   -- returns a scene, or null
                            scene.Draw()
                            (swap to `next` when non-null; ExitScene quits)
 ```
 
 ### Scenes (`Scenes/`)
 
-Every game state — menu, cutscene, future gameplay — implements `IScene`:
+Every game state - menu, cutscene, future gameplay - implements `IScene`:
 
 ```
 IScene
-├── Load()                    entering the scene: acquire resources
-├── Update(dt) → IScene?      logic; return the next scene, or null to stay
-├── Draw()                    render this frame
-└── Unload()                  leaving the scene: release resources
++-- Load()                    entering the scene: acquire resources
++-- Update(dt) -> IScene?      logic; return the next scene, or null to stay
++-- Draw()                    render this frame
++-- Unload()                  leaving the scene: release resources
 ```
 
 Returning `ExitScene.Instance` from `Update` quits the game cleanly. Present
@@ -231,7 +231,7 @@ primitives belong here.
 ### Story, UI, and the intro (`Story/`, `UI/`, `Scenes/IntroScene.cs`)
 
 - `Story/IntroScript.cs` holds the narration as `StoryPage(Heading, Body)`
-  records. It is **placeholder template copy** — a writer edits the strings and
+  records. It is **placeholder template copy** - a writer edits the strings and
   adds/removes/reorders pages without touching game code.
 - `UI/Typewriter.cs` reveals text one character at a time with longer pauses
   after sentence and clause punctuation.
@@ -244,11 +244,11 @@ primitives belong here.
 A single auto-save slot, stored as human-readable JSON (`savegame.json`) in the
 app-data folder. It is built to evolve without breaking old saves:
 
-- **Versioned** — `formatVersion` drives `SaveSystem.Migrate()`.
-- **Forward-compatible** — unknown fields from newer builds are preserved via
+- **Versioned** - `formatVersion` drives `SaveSystem.Migrate()`.
+- **Forward-compatible** - unknown fields from newer builds are preserved via
   `[JsonExtensionData]`; a newer `formatVersion` is never downgraded.
-- **Backward-compatible** — missing fields deserialize to defaults.
-- **Safe writes** — atomic temp-file swap; a corrupt file is quarantined to
+- **Backward-compatible** - missing fields deserialize to defaults.
+- **Safe writes** - atomic temp-file swap; a corrupt file is quarantined to
   `.bak` rather than crashing.
 
 Serialization uses a `System.Text.Json` source-generated context
@@ -272,11 +272,11 @@ Created on first run:
 
 Create a class in `src/JohnnyAppleseed/Scenes/` implementing `IScene`, then return
 an instance of it from another scene's `Update` to transition in. That is the
-whole contract — the loop handles `Load`/`Draw`/`Unload` timing for you.
+whole contract - the loop handles `Load`/`Draw`/`Unload` timing for you.
 
 ### Adding a level
 
-There is no level system yet; the game currently flows menu → intro → menu. When
+There is no level system yet; the game currently flows menu -> intro -> menu. When
 gameplay arrives, follow the established grain:
 
 - A level is best modeled as **its own `IScene`** (e.g. a future
@@ -291,8 +291,8 @@ gameplay arrives, follow the established grain:
 
 All art and audio live at the **repo root**, not under `src/`:
 
-- **`graphics/`** — images (the still-life `.jpg`, `icon.svg`, etc.)
-- **`audio/`** — sounds and music (`.mp3`, `.wav`, ...)
+- **`graphics/`** - images (the still-life `.jpg`, `icon.svg`, etc.)
+- **`audio/`** - sounds and music (`.mp3`, `.wav`, ...)
 
 The `.csproj` embeds *everything* under these two trees into the binary as
 resources, keyed by their path (e.g. `graphics/foo.png`, `audio/bar.mp3`). Load
@@ -306,7 +306,7 @@ byte[]    raw   = Assets.Bytes("some/embedded/file");   // anything else
 ```
 
 So **the only step to add an asset is dropping the file into `graphics/` or
-`audio/`** — the build embeds it automatically and `Assets` can load it by key.
+`audio/`** - the build embeds it automatically and `Assets` can load it by key.
 The same applies to future level-data files; put them under one of these trees
 (or add a similarly-embedded tree) and read them with `Assets.Bytes`.
 
@@ -325,7 +325,7 @@ picks up the new action automatically.
 
 A separate, debug-only binary for measuring what real controllers and embedded
 assets actually do. It references the game project and reuses its internals
-(input layer, app-data paths, build stamp — exposed via `InternalsVisibleTo`),
+(input layer, app-data paths, build stamp - exposed via `InternalsVisibleTo`),
 swapping the game loop for measurement logic, so what it reports is exactly what
 the game sees. It is deliberately **not** part of the packaging pipeline: build
 it locally on the machine under test.
@@ -352,13 +352,13 @@ error).
 
 ```
 src/JohnnyAppleseed/          the game (pure game logic)
-  Program.cs                  entry point → Game.Run()
+  Program.cs                  entry point -> Game.Run()
   Game.cs                     window, audio, input pass, scene loop
   AppData.cs                  per-platform app-data folder
   Scenes/  Input/  Rendering/  Story/  UI/  Save/  Platform/  Assets/
 src/JohnnyAppleseed.Probe/    debug/measurement tooling (not shipped)
-graphics/                     source images  → embedded into the binary
-audio/                        source sounds  → embedded into the binary
+graphics/                     source images  -> embedded into the binary
+audio/                        source sounds  -> embedded into the binary
 scripts/                      uv-run Python: package / publish / native libs / probe / icons
 build/                        downloaded toolchains + source + caches (gitignored)
 dist/                         packaged, shippable artifacts

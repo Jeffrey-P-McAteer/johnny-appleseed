@@ -14,9 +14,9 @@ namespace JohnnyAppleseed.Scenes;
 /// (compiled at load), reveals each line with the typewriter in a dialogue box,
 /// presents choices as a menu, and honours per-line presentation tags:
 ///
-///   • <c># heading: …</c>  the dialogue-box title for that beat
-///   • <c># bg: key</c>     a background image (else the parallax backdrop shows)
-///   • <c># music: key</c>  a looping track (cross-faded via MusicManager)
+///   - <c># heading: ...</c>  the dialogue-box title for that beat
+///   - <c># bg: key</c>     a background image (else the parallax backdrop shows)
+///   - <c># music: key</c>  a looping track (cross-faded via MusicManager)
 ///
 /// The ink runtime state is saved on every beat, so quitting mid-story resumes on
 /// the exact beat. Where the beat leads next (more story, a choice, or the end) is
@@ -45,7 +45,7 @@ sealed class StoryScene : IScene
     private float _blink;
     private float _pageFade;
 
-    // ── layout / palette (matches IntroScene) ──────────────────────────────────
+    // -- layout / palette (matches IntroScene) ----------------------------------
     private const int HeadingFontSize = 30;
     private const int BodyFontSize     = 24;
     private const int HintFontSize     = 16;
@@ -115,7 +115,7 @@ sealed class StoryScene : IScene
 
     public void Unload() => _bg.Dispose();
 
-    // ── flow ────────────────────────────────────────────────────────────────────
+    // -- flow --------------------------------------------------------------------
 
     private IScene? UpdateNarrating()
     {
@@ -130,7 +130,7 @@ sealed class StoryScene : IScene
             if (!_typewriter.IsComplete)
                 _typewriter.CompleteNow();     // first press finishes the line
             else
-                return Advance();               // second press → next beat
+                return Advance();               // second press -> next beat
         }
         return null;
     }
@@ -203,7 +203,7 @@ sealed class StoryScene : IScene
         else
         {
             string line = _runner.CurrentText;
-            BeginBeat(line.Length > 0 ? line : "…");
+            BeginBeat(line.Length > 0 ? line : "...");
         }
     }
 
@@ -265,7 +265,7 @@ sealed class StoryScene : IScene
         return data;
     }
 
-    // ── drawing ─────────────────────────────────────────────────────────────────
+    // -- drawing -----------------------------------------------------------------
 
     private void DrawBackground()
     {
@@ -342,7 +342,7 @@ sealed class StoryScene : IScene
 
         if (_typewriter.IsComplete && MathF.Sin(_blink * 9f) > 0f)
         {
-            const string glyph = "▼";
+            const string glyph = "v";
             int gw = Raylib.MeasureText(glyph, 22);
             Raylib.DrawText(glyph,
                 (int)(box.X + box.Width - BoxPadding - gw),
@@ -378,8 +378,8 @@ sealed class StoryScene : IScene
     {
         string hint = _choosing
             ? (InputSystem.IsGamepadConnected
-                ? "[ ↕ ]  choose     [ A ]  select     [ B ]  menu"
-                : "[ ↕ ]  choose     [ Enter / Click ]  select     [ Esc ]  menu")
+                ? "[ Up/Down ]  choose     [ A ]  select     [ B ]  menu"
+                : "[ Up/Down ]  choose     [ Enter / Click ]  select     [ Esc ]  menu")
             : (InputSystem.IsGamepadConnected
                 ? "[ A ]  continue     [ B ]  menu"
                 : "[ Click / Enter / Space ]  continue     [ Esc ]  menu");

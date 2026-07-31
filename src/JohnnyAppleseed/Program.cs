@@ -20,7 +20,7 @@ static class Program
             // Any unhandled failure during startup/run that reaches here is shown
             // to the user in a native dialog (see StartupError) rather than a
             // silent exit or a raw .NET crash banner.
-            StartupError.Show("Johnny Appleseed — Startup Problem", BuildReport(ex));
+            StartupError.Show("Johnny Appleseed - Startup Problem", BuildReport(ex));
             return 1;
         }
     }

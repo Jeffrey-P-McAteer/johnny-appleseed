@@ -8,7 +8,7 @@
 """
 Publish a Johnny Appleseed release to GitHub.
 
-─── Credentials ────────────────────────────────────────────────────────────────
+--- Credentials ----------------------------------------------------------------
 Stored in ~/.johnny-appleseed-publish-creds.json:
 
   {
@@ -25,14 +25,14 @@ Required scope: repo  (or public_repo for public repositories)
 Run once to create the template:
   uv run scripts/publish.py --init-creds
 
-─── Workflow ────────────────────────────────────────────────────────────────────
+--- Workflow --------------------------------------------------------------------
   1. Compute version YYYY.MM.H (hours elapsed so far in month, UTC)
   2. Build all dist/ artifacts via package.py   (skip with --skip-build)
   3. Create and push an annotated git tag  v{version}
   4. Create a GitHub Release
   5. Upload every artifact found in dist/
 
-─── Usage ───────────────────────────────────────────────────────────────────────
+--- Usage -----------------------------------------------------------------------
   uv run scripts/publish.py                 # build then publish
   uv run scripts/publish.py --skip-build    # publish existing dist/ files
   uv run scripts/publish.py --dry-run       # preview without changing anything
@@ -60,7 +60,7 @@ DIST_DIR   = REPO_ROOT / "dist"
 CREDS_FILE = Path.home() / ".johnny-appleseed-publish-creds.json"
 APP_NAME   = "johnny-appleseed"
 
-# ── credentials ───────────────────────────────────────────────────────────────
+# -- credentials ---------------------------------------------------------------
 
 CREDS_TEMPLATE = {
     "github": {
@@ -116,20 +116,20 @@ def load_creds() -> dict:
     return gh
 
 
-# ── version ───────────────────────────────────────────────────────────────────
+# -- version -------------------------------------------------------------------
 
 def compute_version() -> str:
     """
     YYYY.MM.H where H = hours elapsed since the start of the month (UTC).
     Matches the formula used by the GenerateBuildInfo MSBuild target.
-    Range: 0 (month start) … 743 (31-day month, last hour).
+    Range: 0 (month start) ... 743 (31-day month, last hour).
     """
     now = datetime.now(timezone.utc)
     hours_in_month = (now.day - 1) * 24 + now.hour
     return f"{now.year}.{now.month:02d}.{hours_in_month}"
 
 
-# ── git ───────────────────────────────────────────────────────────────────────
+# -- git -----------------------------------------------------------------------
 
 def git_run(*args: str, capture: bool = True) -> str:
     result = subprocess.run(
@@ -191,7 +191,7 @@ def tag_exists_locally(tag: str) -> bool:
 def create_and_push_tag(tag: str, message: str, dry_run: bool) -> None:
     if tag_exists_locally(tag):
         if not dry_run:
-            print(f"  Local tag {tag} already exists; deleting it …")
+            print(f"  Local tag {tag} already exists; deleting it ...")
             git_run("tag", "-d", tag)
 
     if dry_run:
@@ -202,10 +202,10 @@ def create_and_push_tag(tag: str, message: str, dry_run: bool) -> None:
     git_run("tag", "-a", tag, "-m", message)
     print(f"  Created local tag {tag}")
     git_run("push", "origin", tag)
-    print(f"  Pushed {tag} → origin")
+    print(f"  Pushed {tag} -> origin")
 
 
-# ── GitHub API ────────────────────────────────────────────────────────────────
+# -- GitHub API ----------------------------------------------------------------
 
 class GitHub:
     API    = "https://api.github.com"
@@ -237,9 +237,9 @@ class GitHub:
             msg = r.json().get("message", "") if r.content else ""
             raise RuntimeError(
                 f"GitHub token rejected (401 Unauthorized): {msg}\n"
-                "  • Check the token hasn't expired or been revoked.\n"
-                "  • Fine-grained tokens must be granted 'Contents' read/write access.\n"
-                "  • Classic tokens need the 'repo' scope (or 'public_repo' for public repos).\n"
+                "  - Check the token hasn't expired or been revoked.\n"
+                "  - Fine-grained tokens must be granted 'Contents' read/write access.\n"
+                "  - Classic tokens need the 'repo' scope (or 'public_repo' for public repos).\n"
                 "  Generate a new classic token at: https://github.com/settings/tokens?type=classic"
             )
 
@@ -253,7 +253,7 @@ class GitHub:
 
         if r.status_code == 404:
             # GitHub returns 404 (not 403) when a token exists but cannot see
-            # the repo — common with fine-grained PATs that don't list the repo
+            # the repo - common with fine-grained PATs that don't list the repo
             # explicitly, even for *public* repos.
             # Distinguish "repo does not exist" from "token cannot see it".
             probe = requests.get(
@@ -269,7 +269,7 @@ class GitHub:
                     "but your token cannot access it (GitHub returned 404).\n\n"
                     "This is almost always a fine-grained PAT scope issue:\n"
                     "  GitHub fine-grained PATs must explicitly list every repo they can\n"
-                    "  access — even public ones.  Use a classic PAT instead:\n\n"
+                    "  access - even public ones.  Use a classic PAT instead:\n\n"
                     "  1. Go to https://github.com/settings/tokens?type=classic\n"
                     "  2. Click 'Generate new token (classic)'\n"
                     f"  3. Tick the '{scope}' scope\n"
@@ -281,7 +281,7 @@ class GitHub:
                 f"Verify 'owner' and 'repo' in {CREDS_FILE}"
             )
 
-        # Unexpected status — surface the raw GitHub message.
+        # Unexpected status - surface the raw GitHub message.
         try:
             msg = r.json().get("message", r.text[:200])
         except Exception:
@@ -367,7 +367,7 @@ class _ProgressReader:
             pct    = self._done * 100 // self._total
             done_m = self._done  // 1_048_576
             tot_m  = self._total // 1_048_576
-            bar    = "█" * (pct // 5) + "░" * (20 - pct // 5)
+            bar    = "#" * (pct // 5) + "-" * (20 - pct // 5)
             print(f"\r    [{bar}] {pct:3d}%  {done_m}/{tot_m} MB",
                   end="", flush=True)
         return chunk
@@ -379,9 +379,9 @@ class _ProgressReader:
         self._f.close()
 
 
-# ── artifacts ─────────────────────────────────────────────────────────────────
+# -- artifacts -----------------------------------------------------------------
 
-# Platform → (dist subdirectory filename, upload extension)
+# Platform -> (dist subdirectory filename, upload extension)
 _ARTIFACTS = [
     ("linux-x64",    "linux-x64",    ""),
     ("linux-arm64",  "linux-arm64",  ""),
@@ -403,11 +403,11 @@ def find_artifacts(version: str) -> list[tuple[Path, str]]:
     return result
 
 
-# ── release notes ─────────────────────────────────────────────────────────────
+# -- release notes -------------------------------------------------------------
 
 def make_release_body(version: str, git_info: dict) -> str:
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    dirty_note = "  ⚠️ built with uncommitted changes" if git_info["dirty"] else ""
+    dirty_note = "  [!] built with uncommitted changes" if git_info["dirty"] else ""
 
     return "\n".join([
         f"**Version:** `{version}`  ",
@@ -425,7 +425,7 @@ def make_release_body(version: str, git_info: dict) -> str:
     ])
 
 
-# ── main ──────────────────────────────────────────────────────────────────────
+# -- main ----------------------------------------------------------------------
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -458,14 +458,14 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    # ── --init-creds ──────────────────────────────────────────────────────────
+    # -- --init-creds ----------------------------------------------------------
     if args.init_creds:
         init_creds()
         return
 
-    sep = "─" * 60
+    sep = "-" * 60
 
-    # ── credentials + API connection ──────────────────────────────────────────
+    # -- credentials + API connection ------------------------------------------
     print(sep)
     print("Credentials")
     print(sep)
@@ -473,19 +473,19 @@ def main() -> None:
     gh    = GitHub(creds["token"], creds["owner"], creds["repo"])
 
     if not args.dry_run:
-        print(f"Connecting to GitHub …")
+        print(f"Connecting to GitHub ...")
         try:
             repo_info = gh.verify()
         except RuntimeError as e:
             print(f"ERROR: {e}")
             sys.exit(1)
         visibility = "private" if repo_info.get("private") else "public"
-        print(f"  ✓  {creds['owner']}/{creds['repo']}  ({visibility})")
+        print(f"  OK  {creds['owner']}/{creds['repo']}  ({visibility})")
         print(f"     {repo_info.get('html_url', '')}")
     else:
         print(f"  [dry-run] Would connect to {creds['owner']}/{creds['repo']}")
 
-    # ── version + git state ───────────────────────────────────────────────────
+    # -- version + git state ---------------------------------------------------
     print()
     print(sep)
     print("Version & git state")
@@ -494,24 +494,24 @@ def main() -> None:
     tag      = f"v{version}"
     git_info = check_git_state()
 
-    print(f"  Version:  {version}  →  tag {tag}")
+    print(f"  Version:  {version}  ->  tag {tag}")
     print(f"  Commit:   {git_info['commit']}  [{git_info['branch']}]")
 
     if git_info["dirty"]:
-        print("  ⚠  Working tree has uncommitted changes — the release will be")
+        print("  [!]  Working tree has uncommitted changes - the release will be")
         print("     tagged at the current HEAD, not including these changes.")
 
     unpushed = git_info["unpushed"]
     if unpushed not in ("0", "?", ""):
-        print(f"  ⚠  {unpushed} local commit(s) not yet pushed to origin.")
+        print(f"  [!]  {unpushed} local commit(s) not yet pushed to origin.")
         print("     Consumers downloading the source archive won't see them.")
 
-    # ── check for existing release ────────────────────────────────────────────
+    # -- check for existing release --------------------------------------------
     if not args.dry_run:
         existing = gh.get_release_by_tag(tag)
         if existing:
             if args.force:
-                print(f"\n  Force mode: deleting existing release {tag} …")
+                print(f"\n  Force mode: deleting existing release {tag} ...")
                 gh.delete_release(existing["id"])
                 gh.delete_remote_tag(tag)
                 print(f"  Deleted release and remote tag {tag}")
@@ -524,7 +524,7 @@ def main() -> None:
                 )
                 sys.exit(1)
 
-    # ── build ─────────────────────────────────────────────────────────────────
+    # -- build -----------------------------------------------------------------
     print()
     print(sep)
     print("Build" if not args.skip_build else "Artifacts  (--skip-build)")
@@ -535,10 +535,10 @@ def main() -> None:
         if args.dry_run:
             print(f"  [dry-run] {' '.join(cmd)}")
         else:
-            print(f"  Running package.py …")
+            print(f"  Running package.py ...")
             result = subprocess.run(cmd, cwd=REPO_ROOT)
             if result.returncode != 0:
-                print("ERROR: package.py failed — see output above.", file=sys.stderr)
+                print("ERROR: package.py failed - see output above.", file=sys.stderr)
                 sys.exit(1)
     else:
         print(f"  Skipping build.")
@@ -556,7 +556,7 @@ def main() -> None:
         size_mb = path.stat().st_size / 1_048_576
         print(f"    {upload_name:<50}  {size_mb:5.0f} MB")
 
-    # ── git tag ───────────────────────────────────────────────────────────────
+    # -- git tag ---------------------------------------------------------------
     print()
     print(sep)
     print("Git tag")
@@ -571,7 +571,7 @@ def main() -> None:
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # ── create release ────────────────────────────────────────────────────────
+    # -- create release --------------------------------------------------------
     print()
     print(sep)
     print("GitHub release")
@@ -604,9 +604,9 @@ def main() -> None:
             sys.exit(1)
         release_id  = release["id"]
         release_url = release["html_url"]
-        print(f"  ✓  {release_url}{draft_note}{pre_note}")
+        print(f"  OK  {release_url}{draft_note}{pre_note}")
 
-    # ── upload artifacts ──────────────────────────────────────────────────────
+    # -- upload artifacts ------------------------------------------------------
     print()
     print(sep)
     print(f"Uploading {len(artifacts)} artifact(s)")
@@ -621,25 +621,25 @@ def main() -> None:
             continue
         try:
             asset = gh.upload_asset(release_id, path, upload_name)
-            print(f"    ✓  {asset['browser_download_url']}")
+            print(f"    OK  {asset['browser_download_url']}")
         except (requests.HTTPError, RuntimeError) as e:
-            print(f"    ✗  FAILED: {e}", file=sys.stderr)
+            print(f"    X  FAILED: {e}", file=sys.stderr)
             failed.append(upload_name)
 
-    # ── summary ───────────────────────────────────────────────────────────────
+    # -- summary ---------------------------------------------------------------
     print()
     print(sep)
     if args.dry_run:
-        print(f"DRY-RUN complete — no changes were made.")
+        print(f"DRY-RUN complete - no changes were made.")
     elif failed:
-        print(f"Published with errors — {len(failed)} upload(s) failed:")
+        print(f"Published with errors - {len(failed)} upload(s) failed:")
         for name in failed:
-            print(f"  ✗  {name}")
+            print(f"  X  {name}")
         print(f"\n  Release URL: {release_url}")
         sys.exit(1)
     else:
         uploaded = len(artifacts)
-        print(f"✓  Published {tag}  ({uploaded} artifact(s))")
+        print(f"OK  Published {tag}  ({uploaded} artifact(s))")
         print(f"   {release_url}")
     print(sep)
 

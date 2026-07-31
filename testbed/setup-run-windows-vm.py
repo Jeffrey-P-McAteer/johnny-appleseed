@@ -125,13 +125,13 @@ def ovmf_to_qemu_args(code_path: str):
 
 class AnyUserAuthorizer(DummyAuthorizer):
     """
-    Accept ANY login — anonymous, or any username/password combination — and
+    Accept ANY login - anonymous, or any username/password combination - and
     grant full read+write on one shared root. Intended for a throwaway,
     loopback-only test-VM share where convenience beats access control. Because
     it authenticates everyone, never bind this to anything but 127.0.0.1.
 
     perm 'elradfmwMT' = full read + write: list/retrieve + store/mkdir/delete/
-    rename/append/… so the guest can both fetch builds and push logs.
+    rename/append/... so the guest can both fetch builds and push logs.
     """
     def __init__(self, root, perm='elradfmwMT'):
         super().__init__()
@@ -139,7 +139,7 @@ class AnyUserAuthorizer(DummyAuthorizer):
         self._perm = perm
 
     def validate_authentication(self, username, password, handler):
-        return  # never raise AuthenticationFailed → every credential is accepted
+        return  # never raise AuthenticationFailed -> every credential is accepted
 
     def has_user(self, username):
         return True                     # includes 'anonymous'
@@ -171,7 +171,7 @@ class FtpShare:
     the host).
 
     Networking: with QEMU user-mode networking the guest reaches the host at the
-    gateway 10.0.2.2, which SLIRP forwards to the host's loopback — so we bind to
+    gateway 10.0.2.2, which SLIRP forwards to the host's loopback - so we bind to
     127.0.0.1 (keeps this writable, no-auth FTP off the LAN) and advertise
     10.0.2.2 to the guest. FTP MUST be passive here: in active mode the server
     connects back to the guest, which SLIRP blocks. Hence masquerade_address + a
@@ -339,16 +339,16 @@ ftp.start()
 
 guest_url = f'ftp://{ftp.masquerade}:{ftp.port}/'
 print()
-print('┌─ Test artifacts are shared over FTP ' + ('─' * 31))
-print(f'│  Host folder    : {dist_folder}')
-print(f'│  From the VM    : {guest_url}   (any username/password, or anonymous)')
-print( '│  In Explorer    : paste that URL into the address bar (uses passive mode)')
-print( '│  Do NOT use ftp.exe — it is active-mode and the VM NAT blocks it')
-print(f'│  Copy logs out  : upload files into /_from_vm/  →  {from_vm_folder}')
-print( '│  PowerShell upload example (run inside the VM — anonymous login):')
-print(f'│    (New-Object Net.WebClient).UploadFile(')
-print(f'│      "ftp://{ftp.masquerade}:{ftp.port}/_from_vm/log.txt", "C:\\path\\to\\log.txt")')
-print('└' + ('─' * 67))
+print('+- Test artifacts are shared over FTP ' + ('-' * 31))
+print(f'|  Host folder    : {dist_folder}')
+print(f'|  From the VM    : {guest_url}   (any username/password, or anonymous)')
+print( '|  In Explorer    : paste that URL into the address bar (uses passive mode)')
+print( '|  Do NOT use ftp.exe - it is active-mode and the VM NAT blocks it')
+print(f'|  Copy logs out  : upload files into /_from_vm/  ->  {from_vm_folder}')
+print( '|  PowerShell upload example (run inside the VM - anonymous login):')
+print(f'|    (New-Object Net.WebClient).UploadFile(')
+print(f'|      "ftp://{ftp.masquerade}:{ftp.port}/_from_vm/log.txt", "C:\\path\\to\\log.txt")')
+print('+' + ('-' * 67))
 print()
 
 try:

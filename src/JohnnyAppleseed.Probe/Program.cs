@@ -31,7 +31,7 @@ static class Program
     {
         string mode = args.Length > 0 ? args[0].ToLowerInvariant() : "probe";
 
-        Console.WriteLine($"Johnny Appleseed — probe/dev tools  (game build {BuildInfo.Version})");
+        Console.WriteLine($"Johnny Appleseed - probe/dev tools  (game build {BuildInfo.Version})");
         Console.WriteLine($"app-data: {AppData.Path}");
         Console.WriteLine();
 
@@ -63,7 +63,7 @@ static class Program
         return Capture.Run(scene, seconds, outPath);
     }
 
-    // selftest [save|input|story]  → default runs all, ORs their exit codes.
+    // selftest [save|input|story]  -> default runs all, ORs their exit codes.
     private static int RunSelfTest(string[] args)
     {
         string? which = args.Length > 1 ? args[1].ToLowerInvariant() : null;

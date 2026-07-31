@@ -28,7 +28,7 @@ static class Game
         Console.Error.WriteLine($"[johnny-appleseed] save data: {SaveSystem.SavePath}");
 
         // On Linux: detect display server and guide GLFW's backend selection
-        // BEFORE InitWindow — once GLFW initialises the choice is locked in.
+        // BEFORE InitWindow - once GLFW initialises the choice is locked in.
         if (OperatingSystem.IsLinux())
             LinuxDisplay.Configure();
 
@@ -36,14 +36,14 @@ static class Game
         Raylib.InitWindow(1280, 720, "Johnny Appleseed");
 
         // If the graphics device couldn't come up (e.g. no compatible OpenGL 3.3
-        // driver — common on VMs / remote desktops), surface it as a managed
+        // driver - common on VMs / remote desktops), surface it as a managed
         // exception so Program.Main can show the native startup-error dialog
         // instead of limping on into a blank or broken window. NOTE: this only
         // catches the case where raylib *returns* from InitWindow; some native
         // raylib builds abort() inside GLFW before we regain control (see readme).
         if (!Raylib.IsWindowReady())
             throw new InvalidOperationException(
-                "The graphics device failed to initialize — the window or its " +
+                "The graphics device failed to initialize - the window or its " +
                 "OpenGL 3.3 context could not be created. This usually means the " +
                 "system has no compatible GPU/driver (common on virtual machines " +
                 "and remote desktop sessions).");
@@ -100,9 +100,9 @@ static class Game
     }
 
     // Set the window/taskbar icon from the embedded, build-generated PNG
-    // (graphics/icon.svg → obj/icon.png). Honoured on Windows and X11. Cocoa
-    // (macOS) and native Wayland ignore per-window icons — the icon there comes
-    // from the .app bundle (.icns) or a .desktop file — so skip Wayland to avoid
+    // (graphics/icon.svg -> obj/icon.png). Honoured on Windows and X11. Cocoa
+    // (macOS) and native Wayland ignore per-window icons - the icon there comes
+    // from the .app bundle (.icns) or a .desktop file - so skip Wayland to avoid
     // a spurious GLFW warning, and treat the whole thing as best-effort.
     private static void TrySetWindowIcon()
     {

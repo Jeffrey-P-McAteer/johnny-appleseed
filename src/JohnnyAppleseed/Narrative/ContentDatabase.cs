@@ -12,7 +12,7 @@ namespace JohnnyAppleseed.Narrative;
 /// Lazy and fault-tolerant: definitions load on first access, and a missing or
 /// malformed file degrades to an empty set (logged) rather than crashing the game
 /// before any content exists. The JSONC files may contain <c>//</c> and
-/// <c>/* … */</c> comments (see <see cref="ContentJsonContext"/>).
+/// <c>/* ... */</c> comments (see <see cref="ContentJsonContext"/>).
 /// </summary>
 static class ContentDatabase
 {
@@ -45,7 +45,7 @@ static class ContentDatabase
     {
         if (!Assets.Exists(key))
         {
-            Console.Error.WriteLine($"[content] '{key}' not embedded — using an empty set");
+            Console.Error.WriteLine($"[content] '{key}' not embedded - using an empty set");
             return Array.Empty<T>();
         }
 
@@ -68,11 +68,11 @@ static class ContentDatabase
             string id = idOf(def);
             if (string.IsNullOrWhiteSpace(id))
             {
-                Console.Error.WriteLine($"[content] a {label} has no id — skipped");
+                Console.Error.WriteLine($"[content] a {label} has no id - skipped");
                 continue;
             }
             if (!map.TryAdd(id, def))
-                Console.Error.WriteLine($"[content] duplicate {label} id '{id}' — keeping the first");
+                Console.Error.WriteLine($"[content] duplicate {label} id '{id}' - keeping the first");
         }
         return map;
     }

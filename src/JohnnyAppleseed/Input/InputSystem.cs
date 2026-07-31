@@ -11,7 +11,7 @@ namespace JohnnyAppleseed.Input;
 /// scene logic runs. Scenes query logical actions via <see cref="IsPressed"/> /
 /// <see cref="IsDown"/> rather than polling Raylib directly.
 ///
-/// ── Dynamic multi-gamepad tracking ──────────────────────────────────────────
+/// -- Dynamic multi-gamepad tracking ------------------------------------------
 /// All <see cref="MaxGamepads"/> slots are tracked simultaneously, because the OS
 /// happily reports non-controllers (laptop touchpads, lid sensors, virtual
 /// devices) as "gamepads" and they can occupy low slots. Rather than trust slot
@@ -21,20 +21,20 @@ namespace JohnnyAppleseed.Input;
 ///
 /// For the (many) APIs that need a single controller, the <em>active</em> pad is:
 ///   1. the slot with the most events in the last 30 s (the pad you're using), else
-///   2. on a tie or when nobody has produced any events, the "least-virtual" slot —
+///   2. on a tie or when nobody has produced any events, the "least-virtual" slot --
 ///      the one most likely to be a real gamepad, judged by name and axis-count
 ///      heuristics (see <see cref="EstimateRealness"/>; these are guesses, not
 ///      authoritative identification), else
 ///   3. the current pad (stability), else the lowest slot.
 /// The upshot: an idle touchpad never steals focus, and the instant you press a
-/// button on a real controller it becomes active — on any slot, at any time.
+/// button on a real controller it becomes active - on any slot, at any time.
 ///
-/// Mouse clicks are intentionally not mapped here — they carry spatial context
+/// Mouse clicks are intentionally not mapped here - they carry spatial context
 /// (position) that the scene needs to resolve anyway.
 /// </summary>
 static class InputSystem
 {
-    // ── constants ─────────────────────────────────────────────────────────────
+    // -- constants -------------------------------------------------------------
     private const int   NoGamepad     = -1;
     private const int   MaxGamepads   = 4;      // raylib's default MAX_GAMEPADS
     private const float WindowSeconds = 30f;    // rolling event-count window
@@ -46,7 +46,7 @@ static class InputSystem
         Enum.GetValues<GamepadButton>().Where(b => b != GamepadButton.Unknown).ToArray();
     private static readonly GamepadAxis[] AllAxes = Enum.GetValues<GamepadAxis>();
 
-    // Heuristic name hints for the least-virtual tie-break. NOT authoritative —
+    // Heuristic name hints for the least-virtual tie-break. NOT authoritative --
     // device names vary by OS, driver, and locale; treat as a best-effort guess.
     private static readonly string[] VirtualNameHints =
     {
@@ -62,7 +62,7 @@ static class InputSystem
         "wheel", "gravis", "saitek", "thrustmaster",
     };
 
-    // ── state ─────────────────────────────────────────────────────────────────
+    // -- state -----------------------------------------------------------------
     private static int _active = NoGamepad;                 // resolved active slot, or -1
     private static readonly bool[] _available = new bool[MaxGamepads];
 
@@ -84,7 +84,7 @@ static class InputSystem
         return a;
     }
 
-    // ── lifecycle ─────────────────────────────────────────────────────────────
+    // -- lifecycle -------------------------------------------------------------
 
     /// <summary>
     /// One-time setup after <c>InitWindow</c>. Loads an up-to-date SDL gamepad
@@ -134,16 +134,16 @@ static class InputSystem
         }
     }
 
-    // ── active-pad selection (pure, unit-tested) ────────────────────────────────
+    // -- active-pad selection (pure, unit-tested) --------------------------------
 
     /// <summary>A per-slot snapshot fed to <see cref="SelectActiveGamepad"/>.</summary>
     internal readonly record struct GamepadCandidate(
         int Slot, bool Available, int RecentEventCount, int Realness);
 
     /// <summary>
-    /// Choose the single active gamepad from a snapshot of all slots. Pure — no
-    /// Raylib — so the full policy is testable without hardware. Preference order:
-    /// most recent events → higher realness → current pad (stability) → lowest slot.
+    /// Choose the single active gamepad from a snapshot of all slots. Pure - no
+    /// Raylib - so the full policy is testable without hardware. Preference order:
+    /// most recent events -> higher realness -> current pad (stability) -> lowest slot.
     /// </summary>
     internal static int SelectActiveGamepad(IReadOnlyList<GamepadCandidate> candidates, int current)
     {
@@ -166,7 +166,7 @@ static class InputSystem
         return a.Slot < b.Slot;
     }
 
-    // ── per-slot event tracking ─────────────────────────────────────────────────
+    // -- per-slot event tracking -------------------------------------------------
 
     // Count a button-press edge or a dead-zone crossing as one "event".
     private static void DetectEvents(int slot, double now)
@@ -175,7 +175,7 @@ static class InputSystem
         foreach (GamepadButton b in AllButtons)
         {
             bool isDown = Raylib.IsGamepadButtonDown(slot, b);
-            if (isDown && down.Add(b))       // Add == true → newly pressed this frame
+            if (isDown && down.Add(b))       // Add == true -> newly pressed this frame
                 Record(slot, now);
             else if (!isDown)
                 down.Remove(b);
@@ -211,7 +211,7 @@ static class InputSystem
         _axisEngaged[slot].Clear();
     }
 
-    // Heuristic "least-virtual" score — higher means more likely a real, physical
+    // Heuristic "least-virtual" score - higher means more likely a real, physical
     // gamepad. Based only on the device NAME and axis count (the only identifying
     // signals Raylib exposes); this is a guess, not authoritative identification.
     private static int EstimateRealness(int slot)
@@ -222,8 +222,8 @@ static class InputSystem
         if (VirtualNameHints.Any(name.Contains)) score -= 100;
         if (RealNameHints.Any(name.Contains))    score += 100;
 
-        // Real controllers have two sticks + triggers (≥4 axes); a lid sensor or
-        // touchpad masquerading as a pad usually has 0–1.
+        // Real controllers have two sticks + triggers (>=4 axes); a lid sensor or
+        // touchpad masquerading as a pad usually has 0-1.
         int axes = Raylib.GetGamepadAxisCount(slot);
         if (axes >= 4) score += 20;
         else if (axes <= 1) score -= 20;
@@ -231,7 +231,7 @@ static class InputSystem
         return score;
     }
 
-    // ── public API ────────────────────────────────────────────────────────────
+    // -- public API ------------------------------------------------------------
 
     /// <summary>Whether a gamepad is currently connected and active.</summary>
     public static bool IsGamepadConnected => _active >= 0;
@@ -307,13 +307,13 @@ static class InputSystem
                 Raylib.IsKeyPressed(KeyboardKey.Escape) ||
                 (hasGp && Raylib.IsGamepadButtonPressed(gp, GamepadButton.RightFaceRight)),
 
-            // LB / L1  →  Q or PageUp on keyboard
+            // LB / L1  ->  Q or PageUp on keyboard
             InputAction.ShortcutLeft =>
                 Raylib.IsKeyPressed(KeyboardKey.Q)       ||
                 Raylib.IsKeyPressed(KeyboardKey.PageUp)  ||
                 (hasGp && Raylib.IsGamepadButtonPressed(gp, GamepadButton.LeftTrigger1)),
 
-            // RB / R1  →  E or PageDown on keyboard
+            // RB / R1  ->  E or PageDown on keyboard
             InputAction.ShortcutRight =>
                 Raylib.IsKeyPressed(KeyboardKey.E)        ||
                 Raylib.IsKeyPressed(KeyboardKey.PageDown) ||
@@ -374,13 +374,13 @@ static class InputSystem
         };
     }
 
-    // ── helpers ───────────────────────────────────────────────────────────────
+    // -- helpers ---------------------------------------------------------------
 
     private static void OnActiveGamepadChanged(int previous, int active)
     {
         if (active >= 0)
             Console.Error.WriteLine(
-                $"[input] active gamepad → slot {active} \"{Raylib.GetGamepadName_(active)}\"");
+                $"[input] active gamepad -> slot {active} \"{Raylib.GetGamepadName_(active)}\"");
         else if (previous >= 0)
             Console.Error.WriteLine("[input] no active gamepad; using keyboard/mouse");
 

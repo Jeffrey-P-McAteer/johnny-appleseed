@@ -20,7 +20,7 @@ sealed class MainMenuScene : IScene
     // Snapshot of the save taken on entry, used to label PLAY and to resume.
     private SaveData? _save;
 
-    // ── layout constants ──────────────────────────────────────────────────────
+    // -- layout constants ------------------------------------------------------
     private const int TitleFontSize  = 60;
     private const int MenuFontSize   = 36;
     private const int MenuItemHeight = 56;
@@ -53,9 +53,9 @@ sealed class MainMenuScene : IScene
         _isFullscreen = Raylib.IsWindowFullscreen();
 
         int count = _baseLabels.Length;
-        int previousIndex = _selectedIndex;   // detect focus change → play a click
+        int previousIndex = _selectedIndex;   // detect focus change -> play a click
 
-        // ── navigation ────────────────────────────────────────────────────────
+        // -- navigation --------------------------------------------------------
         // Up / Down / Left stick / D-pad
         if (InputSystem.IsPressed(InputAction.Up)           ||
             InputSystem.IsPressed(InputAction.ShortcutLeft))
@@ -73,7 +73,7 @@ sealed class MainMenuScene : IScene
                 _selectedIndex = i;
         }
 
-        // ── activation ────────────────────────────────────────────────────────
+        // -- activation --------------------------------------------------------
         bool activate =
             InputSystem.IsPressed(InputAction.Confirm) ||
             (Raylib.IsMouseButtonPressed(MouseButton.Left) &&
@@ -82,7 +82,7 @@ sealed class MainMenuScene : IScene
         if (activate)
             return Activate(_selectedIndex);
 
-        // Cancel / B → highlight Exit without quitting (common UX convention)
+        // Cancel / B -> highlight Exit without quitting (common UX convention)
         if (InputSystem.IsPressed(InputAction.Cancel))
             _selectedIndex = IdxExit;
 
@@ -106,7 +106,7 @@ sealed class MainMenuScene : IScene
         // so there is nothing scene-specific to free here.
     }
 
-    // ── helpers ───────────────────────────────────────────────────────────────
+    // -- helpers ---------------------------------------------------------------
 
     // Draw the still-life to fully cover the window (scale-to-fill, centre-cropped),
     // then a soft dark wash so the title and menu text stay legible over the busy
@@ -162,7 +162,7 @@ sealed class MainMenuScene : IScene
         p.X >= r.X && p.X <= r.X + r.Width &&
         p.Y >= r.Y && p.Y <= r.Y + r.Height;
 
-    // ── drawing ───────────────────────────────────────────────────────────────
+    // -- drawing ---------------------------------------------------------------
 
     private void DrawMenu()
     {
@@ -206,10 +206,10 @@ sealed class MainMenuScene : IScene
             Raylib.DrawText(label, (int)rect.X,     iy - MenuFontSize / 2,     MenuFontSize, col);
         }
 
-        // hint — show gamepad status
+        // hint - show gamepad status
         string hint = InputSystem.IsGamepadConnected
-            ? "[ ↕ / D-pad / L-stick ]  navigate    [ A ]  select    [ LB/RB ]  quick-nav"
-            : "[ ↕ / WASD ]  navigate    [ Enter ]  select    [ Q / E ]  quick-nav";
+            ? "[ Up/Down / D-pad / L-stick ]  navigate    [ A ]  select    [ LB/RB ]  quick-nav"
+            : "[ Up/Down / WASD ]  navigate    [ Enter ]  select    [ Q / E ]  quick-nav";
 
         int hw = Raylib.MeasureText(hint, 14);
         Raylib.DrawText(hint, sw / 2 - hw / 2, sh - 34, 14, new Color(150, 150, 180, 160));

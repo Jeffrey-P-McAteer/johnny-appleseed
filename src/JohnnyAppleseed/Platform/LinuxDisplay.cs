@@ -7,18 +7,18 @@ namespace JohnnyAppleseed.Platform;
 /// selection before <c>Raylib.InitWindow()</c> is called.
 ///
 /// Background
-/// ──────────
+/// ----------
 /// The Raylib-cs NuGet libraylib.so is compiled with GLFW 3.4 but only the
 /// X11 backend enabled.  On a Wayland desktop both WAYLAND_DISPLAY (native
 /// compositor) and DISPLAY (XWayland compatibility socket) are typically set,
 /// so the game runs via XWayland without any extra setup.
 ///
-/// "Native Wayland" — speaking directly to the Wayland compositor — gives
+/// "Native Wayland" - speaking directly to the Wayland compositor - gives
 /// better HiDPI scaling, lower latency, and works on pure Wayland sessions
 /// that don't run XWayland at all.
 ///
 /// Enabling native Wayland
-/// ───────────────────────
+/// -----------------------
 /// Build a GLFW 3.4 multi-platform libraylib.so (both X11 and Wayland
 /// backends compiled in) with:
 ///
@@ -34,7 +34,7 @@ namespace JohnnyAppleseed.Platform;
 /// 3.4's backend auto-detect chooses Wayland.
 ///
 /// If <c>BuildInfo.WaylandEnabled</c> is false (default NuGet X11-only lib),
-/// DISPLAY is left intact and the game runs via XWayland — safe on all desktops.
+/// DISPLAY is left intact and the game runs via XWayland - safe on all desktops.
 /// </summary>
 [SupportedOSPlatform("linux")]
 static class LinuxDisplay
@@ -62,7 +62,7 @@ static class LinuxDisplay
         {
             Detected = Backend.Unknown;
             Console.Error.WriteLine(
-                "[Display] Neither DISPLAY nor WAYLAND_DISPLAY is set — " +
+                "[Display] Neither DISPLAY nor WAYLAND_DISPLAY is set - " +
                 "cannot open a window.");
             return;
         }
@@ -93,7 +93,7 @@ static class LinuxDisplay
 
         if (hasWayland && !hasX11)
         {
-            // Pure Wayland — no XWayland fallback.
+            // Pure Wayland - no XWayland fallback.
             if (!WaylandLibPresent())
             {
                 Console.Error.WriteLine(
@@ -110,12 +110,12 @@ static class LinuxDisplay
             return;
         }
 
-        // DISPLAY set, no WAYLAND_DISPLAY — plain X11 desktop.
+        // DISPLAY set, no WAYLAND_DISPLAY - plain X11 desktop.
         Detected = Backend.X11;
         Console.Error.WriteLine("[Display] X11");
     }
 
-    // ── private ───────────────────────────────────────────────────────────────
+    // -- private ---------------------------------------------------------------
 
     // BuildInfo.WaylandEnabled is a compile-time constant stamped by the
     // GenerateBuildInfo MSBuild target.  It is true only when the binary was
@@ -124,6 +124,6 @@ static class LinuxDisplay
     //
     // Using a constant instead of a sidecar sentinel file means Wayland
     // detection works correctly regardless of how the binary is packaged or
-    // redistributed — no extra file to carry around.
+    // redistributed - no extra file to carry around.
     private static bool WaylandLibPresent() => BuildInfo.WaylandEnabled;
 }

@@ -2,7 +2,7 @@ namespace JohnnyAppleseed.Probe;
 
 /// <summary>
 /// Reads the kernel's own view of input devices on Linux from
-/// <c>/proc/bus/input/devices</c> — unprivileged and independent of Raylib, so it
+/// <c>/proc/bus/input/devices</c> - unprivileged and independent of Raylib, so it
 /// helps distinguish "the OS doesn't see the pad" from "Raylib maps it wrong".
 /// </summary>
 static class LinuxInput
@@ -50,9 +50,9 @@ static class LinuxInput
         if (name == null || handlers == null)
             return;
 
-        // Only surface things that expose a joystick node — that's what raylib/GLFW
+        // Only surface things that expose a joystick node - that's what raylib/GLFW
         // consumes. (Full evdev "eventN" nodes are noted for the raw reader.)
         if (handlers.Contains("js"))
-            Console.WriteLine($"  \"{name}\"  →  {handlers}");
+            Console.WriteLine($"  \"{name}\"  ->  {handlers}");
     }
 }
