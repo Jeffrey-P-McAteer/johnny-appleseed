@@ -384,5 +384,11 @@ testbed/                      local VM helpers for manual cross-platform testing
  - https://nps.maps.arcgis.com/apps/webappviewer/index.html?id=cea61820e75c4ce997f866eea3aaf5b3
  - https://commons.wikimedia.org/w/index.php?search=Appalachian&title=Special%3AMediaSearch&type=image
 
+**Johnny Appleseed research**
 
+ - https://en.wikipedia.org/wiki/Johnny_Appleseed
+ - https://waapple.org/johnny-appleseed/
+ - https://www.britannica.com/biography/John-Chapman
+ - https://www.sciencehistory.org/stories/disappearing-pod/the-debaucherous-legacy-of-johnny-appleseed/
+ - https://www.biography.com/history-culture/johnny-appleseed
 

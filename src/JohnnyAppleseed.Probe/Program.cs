@@ -21,8 +21,8 @@ namespace JohnnyAppleseed.Probe;
 ///                       round-trip (headless). Exit 0 = parsed & consistent.
 ///   capture [menu|intro] [seconds] [out.png]
 ///                       Render a scene headlessly and write a PNG screenshot.
-///   selftest [save|input]
-///                       Run the headless save / input self-tests (default: both).
+///   selftest [save|input|story|art|nav]
+///                       Run the headless self-tests (default: all).
 ///                       Exit code 0 = all passed.
 /// </summary>
 static class Program
@@ -70,9 +70,11 @@ static class Program
         bool save  = which is null or "save";
         bool input = which is null or "input";
         bool story = which is null or "story";
-        if (!save && !input && !story)
+        bool art   = which is null or "art";
+        bool nav   = which is null or "nav";
+        if (!save && !input && !story && !art && !nav)
         {
-            Console.Error.WriteLine($"unknown suite '{which}'. valid: save | input | story (default: all)");
+            Console.Error.WriteLine($"unknown suite '{which}'. valid: save | input | story | art | nav (default: all)");
             return 2;
         }
 
@@ -80,6 +82,8 @@ static class Program
         if (save)  rc |= SaveSelfTest.Run();
         if (input) rc |= InputSelfTest.Run();
         if (story) rc |= StorySelfTest.Run();
+        if (art)   rc |= ArtVariantSelfTest.Run();
+        if (nav)   rc |= MenuNavSelfTest.Run();
         return rc;
     }
 
@@ -87,7 +91,7 @@ static class Program
     {
         Console.Error.WriteLine(
             $"unknown mode '{bad}'. valid: probe (default) | list | raw [device] | " +
-            "assets | content | capture [menu|intro] [secs] [out.png] | selftest [save|input]");
+            "assets | content | capture [menu|intro] [secs] [out.png] | selftest [save|input|story|art|nav]");
         return 2;
     }
 }

@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
 using Raylib_cs;
+using JohnnyAppleseed.Rendering;
 
 namespace JohnnyAppleseed;
 
@@ -28,9 +29,18 @@ static class Assets
     // UnloadAll. (Sounds, by contrast, are fully decoded up front, so their bytes
     // need no pinning.)
     private static readonly Dictionary<string, (Music music, GCHandle pin)> _music = new();
+    private static readonly Dictionary<string, AnimatedTexture> _animated = new();
 
     /// <summary>True if an embedded resource with this logical key exists.</summary>
     public static bool Exists(string key) => Asm.GetManifestResourceInfo(key) is not null;
+
+    /// <summary>
+    /// Every embedded key beginning with <paramref name="prefix"/> (ordinal), e.g.
+    /// all members of an art set: <c>Keys("graphics/main-menu/backdrop")</c>. Used
+    /// by <see cref="Ambient.ArtVariant"/> to enumerate variant candidates.
+    /// </summary>
+    public static IEnumerable<string> Keys(string prefix) =>
+        Asm.GetManifestResourceNames().Where(n => n.StartsWith(prefix, StringComparison.Ordinal));
 
     /// <summary>Raw bytes of an embedded asset. Throws if the key is missing.</summary>
     public static byte[] Bytes(string key)
@@ -64,6 +74,33 @@ static class Assets
         Raylib.UnloadImage(img);
         _textures[key] = tex;
         return tex;
+    }
+
+    /// <summary>
+    /// A frame source for an embedded image, decoded on first use and cached.
+    /// A <c>.gif</c> becomes an animated instance (advance it each frame); any other
+    /// image (<c>.png</c>, <c>.jpg</c>, ...) becomes a single-frame instance. Callers
+    /// draw <see cref="AnimatedTexture.Current"/> and never unload it directly; call
+    /// <see cref="UnloadAll"/>.
+    /// </summary>
+    public static AnimatedTexture Animated(string key)
+    {
+        if (_animated.TryGetValue(key, out AnimatedTexture? cached))
+            return cached;
+
+        AnimatedTexture anim;
+        if (string.Equals(Path.GetExtension(key), ".gif", StringComparison.OrdinalIgnoreCase))
+        {
+            Image img = Raylib.LoadImageAnimFromMemory(".gif", Bytes(key), out int frames);
+            anim = AnimatedTexture.Animated(img, frames);
+        }
+        else
+        {
+            anim = AnimatedTexture.Static(LoadImage(key));
+        }
+
+        _animated[key] = anim;
+        return anim;
     }
 
     /// <summary>
@@ -117,6 +154,10 @@ static class Assets
         foreach (Texture2D tex in _textures.Values)
             Raylib.UnloadTexture(tex);
         _textures.Clear();
+
+        foreach (AnimatedTexture anim in _animated.Values)
+            anim.Dispose();
+        _animated.Clear();
 
         foreach (Sound snd in _sounds.Values)
             Raylib.UnloadSound(snd);

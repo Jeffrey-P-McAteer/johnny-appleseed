@@ -99,7 +99,10 @@ def export_one(binary: Path, src: Path, out_base: Path, force: bool) -> tuple[in
     if frames is None:
         note(f"skip (not a valid .aseprite): {src}")
         return 0, False
-    outs = [out_base.with_suffix(ext) for ext in outputs_for(frames)]
+    # Append the extension rather than with_suffix(), so variant tags in the stem
+    # (e.g. "backdrop.rainy") are preserved instead of being treated as a suffix
+    # and replaced (which would collapse backdrop.rainy -> backdrop.gif).
+    outs = [out_base.with_name(out_base.name + ext) for ext in outputs_for(frames)]
 
     if not force and is_fresh(src, outs):
         print(f"  OK up-to-date: {src.name}  ({frames} frame{'s' if frames != 1 else ''} "
