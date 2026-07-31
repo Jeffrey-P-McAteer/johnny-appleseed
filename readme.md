@@ -391,4 +391,6 @@ testbed/                      local VM helpers for manual cross-platform testing
  - https://www.britannica.com/biography/John-Chapman
  - https://www.sciencehistory.org/stories/disappearing-pod/the-debaucherous-legacy-of-johnny-appleseed/
  - https://www.biography.com/history-culture/johnny-appleseed
+ - https://kmgunnart.com/tag/johnny-appleseed/
+ - https://www.eastportlandblog.com/2020/09/21/architecture-of-the-cocktail-the-real-johnny-appleseed-by-bill-stott/
 

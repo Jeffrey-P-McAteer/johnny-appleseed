@@ -27,6 +27,7 @@ sealed class StoryScene : IScene
     public const string IntroStory = "story/chapters/00-intro/intro.ink";
 
     private readonly string _storyKey;
+    private readonly bool _fresh;   // NEW STORY: ignore any saved resume point
 
     private StoryRunner _runner = null!;
     private SaveData _save = null!;
@@ -64,7 +65,15 @@ sealed class StoryScene : IScene
     private static readonly Color ColHint     = new(150, 150, 180, 170);
     private static readonly Color ColVignette = new(0,   0,   0,  120);
 
-    public StoryScene(string storyKey = IntroStory) => _storyKey = storyKey;
+    /// <param name="fresh">
+    /// When true (the menu's NEW STORY), any saved resume point is discarded and the
+    /// story restarts from the beginning, overwriting the single save slot.
+    /// </param>
+    public StoryScene(string storyKey = IntroStory, bool fresh = false)
+    {
+        _storyKey = storyKey;
+        _fresh = fresh;
+    }
 
     public void Load()
     {
@@ -73,11 +82,18 @@ sealed class StoryScene : IScene
 
         _save = SaveSystem.Load() ?? NewSave();
 
+        // NEW STORY: wipe the narrative state so nothing resumes and the run starts over.
+        if (_fresh)
+        {
+            _save.World = new WorldState();
+            _save.Story.IntroComplete = false;
+        }
+
         string source = System.Text.Encoding.UTF8.GetString(Assets.Bytes(_storyKey));
         _runner = new StoryRunner(source);
 
         bool resumed = false;
-        if (!string.IsNullOrEmpty(_save.World.InkState) && !_save.Story.IntroComplete)
+        if (!_fresh && !string.IsNullOrEmpty(_save.World.InkState) && !_save.Story.IntroComplete)
         {
             try { _runner.LoadState(_save.World.InkState!); resumed = true; }
             catch (Exception ex)

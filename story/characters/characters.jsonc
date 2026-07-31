@@ -17,7 +17,7 @@
     "id": "johnny",
     "name": "John Chapman",
     "description": "A barefoot wanderer who plants orchards ahead of the settlers, so fruit is waiting when they arrive.",
-    "portrait": "graphics/portraits/johnny.png",
+    "portrait": "graphics/portraits/johnny.jpg",
     "textColor": "#FFD250"   // warm apple-gold, matches the UI accent
   },
 

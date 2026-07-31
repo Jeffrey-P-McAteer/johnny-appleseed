@@ -50,6 +50,22 @@ static class MenuNavSelfTest
         var tie = new List<Rectangle> { Btn(100, 100), Btn(70, 30), Btn(130, 30) };
         fails += Eq(DirectionalNav.Next(tie, 0, NavDirection.Up), 1, "equidistant tie -> lower index");
 
+        // Freeform scattered layout = the real main menu (centers at 1600x900):
+        //   0 continue (0.60,0.45)  1 new_story (0.36,0.78)
+        //   2 preferences (0.80,0.82)  3 leave (0.10,0.88)
+        // Nothing sits in the strict cone above NEW STORY, so the relaxed tier must
+        // still reach CONTINUE - the case the user called out.
+        var menu = new List<Rectangle>
+        {
+            Btn(960, 405),   // 0 continue
+            Btn(576, 702),   // 1 new_story
+            Btn(1280, 738),  // 2 preferences
+            Btn(160, 792),   // 3 leave
+        };
+        fails += Eq(DirectionalNav.Next(menu, 1, NavDirection.Up),   0, "NEW STORY + up -> CONTINUE (relaxed tier)");
+        fails += Eq(DirectionalNav.Next(menu, 3, NavDirection.Up),   1, "LEAVE + up -> NEW STORY (relaxed tier)");
+        fails += Eq(DirectionalNav.Next(menu, 0, NavDirection.Down), 2, "CONTINUE + down -> PREFERENCES (in cone)");
+
         // Guards.
         fails += Eq(DirectionalNav.Next(new List<Rectangle>(), 0, NavDirection.Up), 0, "empty list -> current");
         fails += Eq(DirectionalNav.Next(rects, 99, NavDirection.Up), 99, "out-of-range current -> unchanged");

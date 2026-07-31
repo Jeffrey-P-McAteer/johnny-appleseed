@@ -38,9 +38,12 @@ static class ConditionsProvider
 
     // Guarded by _lock.
     private static Weather  _weather     = Weather.Normal;
+    private static double   _lat         = 0;
+    private static double   _lon         = 0;
     private static bool     _southern    = false;
     private static DateTime _fetchedUtc  = DateTime.MinValue;
     private static bool     _enabled     = true;
+    private static Weather? _override    = null;   // manual override; null = automatic
     private static int      _revision    = 0;
     private static bool     _seeded      = false;
 
@@ -53,14 +56,59 @@ static class ConditionsProvider
         {
             EnsureSeeded();
             lock (_lock)
-                return new Conditions(_weather, ConditionMap.SeasonFromDate(DateTime.Now, _southern));
+            {
+                Weather w = _override ?? (_enabled ? _weather : Weather.Normal);
+                return new Conditions(w, ConditionMap.SeasonFromDate(DateTime.Now, _southern));
+            }
         }
     }
 
-    /// <summary>Bumps whenever the weather reading changes; watch it to swap art.</summary>
+    /// <summary>Bumps whenever the effective conditions change; watch it to swap art.</summary>
     public static int Revision
     {
         get { lock (_lock) return _revision; }
+    }
+
+    /// <summary>
+    /// Whether live weather fetching is on. Turning it off pins weather to
+    /// <see cref="Weather.Normal"/> (unless a manual <see cref="WeatherOverride"/> is
+    /// set); turning it on kicks off a refresh. Persisted to the cache file.
+    /// </summary>
+    public static bool Enabled
+    {
+        get { EnsureSeeded(); lock (_lock) return _enabled; }
+        set
+        {
+            EnsureSeeded();
+            lock (_lock)
+            {
+                if (_enabled == value) return;
+                _enabled = value;
+                _revision++;
+            }
+            SaveCache();
+            if (value) BeginRefresh();
+        }
+    }
+
+    /// <summary>
+    /// Manual weather override, or null for automatic. When set, it wins over any
+    /// fetched/normal weather regardless of <see cref="Enabled"/>. Persisted.
+    /// </summary>
+    public static Weather? WeatherOverride
+    {
+        get { EnsureSeeded(); lock (_lock) return _override; }
+        set
+        {
+            EnsureSeeded();
+            lock (_lock)
+            {
+                if (_override == value) return;
+                _override = value;
+                _revision++;
+            }
+            SaveCache();
+        }
     }
 
     /// <summary>
@@ -110,8 +158,17 @@ static class ConditionsProvider
             if (root.TryGetProperty("weather", out JsonElement wv) &&
                 Enum.TryParse(wv.GetString(), ignoreCase: true, out Weather w))
                 _weather = w;
+            // "auto" (or absent/invalid) leaves _override null.
+            if (root.TryGetProperty("override", out JsonElement ov) &&
+                Enum.TryParse(ov.GetString(), ignoreCase: true, out Weather ow))
+                _override = ow;
             if (root.TryGetProperty("latitude", out JsonElement lv) && lv.TryGetDouble(out double lat))
+            {
+                _lat = lat;
                 _southern = lat < 0;
+            }
+            if (root.TryGetProperty("longitude", out JsonElement lo) && lo.TryGetDouble(out double lon))
+                _lon = lon;
             if (root.TryGetProperty("fetchedUtc", out JsonElement fv) &&
                 DateTime.TryParse(fv.GetString(), CultureInfo.InvariantCulture,
                                   DateTimeStyles.RoundtripKind, out DateTime dt))
@@ -123,8 +180,15 @@ static class ConditionsProvider
         }
     }
 
-    private static void SaveCache(Weather weather, double lat, double lon)
+    // Persist the whole current state (weather + settings) from the fields.
+    private static void SaveCache()
     {
+        Weather weather; double lat, lon; DateTime fetched; bool enabled; Weather? ovr;
+        lock (_lock)
+        {
+            weather = _weather; lat = _lat; lon = _lon;
+            fetched = _fetchedUtc; enabled = _enabled; ovr = _override;
+        }
         try
         {
             AppData.Initialize();
@@ -132,10 +196,12 @@ static class ConditionsProvider
             using var w = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
             w.WriteStartObject();
             w.WriteString("weather", weather.ToString());
+            w.WriteString("override", ovr?.ToString() ?? "auto");
             w.WriteNumber("latitude", lat);
             w.WriteNumber("longitude", lon);
-            w.WriteString("fetchedUtc", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
-            w.WriteBoolean("enabled", true);
+            w.WriteString("fetchedUtc", fetched == DateTime.MinValue
+                ? "" : fetched.ToString("o", CultureInfo.InvariantCulture));
+            w.WriteBoolean("enabled", enabled);
             w.WriteEndObject();
         }
         catch (Exception ex)
@@ -162,11 +228,13 @@ static class ConditionsProvider
         lock (_lock)
         {
             _weather    = weather;
+            _lat        = lat;
+            _lon        = lon;
             _southern   = lat < 0;
             _fetchedUtc = DateTime.UtcNow;
             _revision++;
         }
-        SaveCache(weather, lat, lon);
+        SaveCache();
         Log($"weather -> {weather}  (lat {lat.ToString("F2", CultureInfo.InvariantCulture)}, {country})");
     }
 

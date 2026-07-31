@@ -3,7 +3,6 @@ using System.Numerics;
 using JohnnyAppleseed.Ambient;
 using JohnnyAppleseed.Input;
 using JohnnyAppleseed.Rendering;
-using JohnnyAppleseed.Save;
 using JohnnyAppleseed.UI;
 
 namespace JohnnyAppleseed.Scenes;
@@ -42,9 +41,6 @@ sealed class MainMenuScene : IScene
     private bool     _isFullscreen;
     private float[]  _glow = Array.Empty<float>();
 
-    // Snapshot of the save taken on entry, used to label PLAY and to resume.
-    private SaveData? _save;
-
     public void Load()
     {
         _layout = MenuLayoutDatabase.Layout;
@@ -54,7 +50,6 @@ sealed class MainMenuScene : IScene
         ResolveBackdrop();
 
         _isFullscreen = Raylib.IsWindowFullscreen();
-        _save = SaveSystem.Load();            // may be null on a fresh install
         Assets.Sound(FocusSoundKey);          // pre-decode so the first move isn't silent
     }
 
@@ -96,9 +91,9 @@ sealed class MainMenuScene : IScene
         if (activate)
             return Activate(_layout.Buttons[_selectedIndex].ActionKind);
 
-        // Cancel / B -> highlight the exit button without quitting (UX convention).
+        // Cancel / B -> highlight the leave button without quitting (UX convention).
         if (InputSystem.IsPressed(InputAction.Cancel))
-            _selectedIndex = ExitIndex(count);
+            _selectedIndex = LeaveIndex(count);
 
         if (_selectedIndex != previousIndex)
             Raylib.PlaySound(Assets.Sound(FocusSoundKey));
@@ -241,24 +236,24 @@ sealed class MainMenuScene : IScene
         return rects;
     }
 
-    private int ExitIndex(int count)
+    private int LeaveIndex(int count)
     {
         for (int i = 0; i < count; i++)
-            if (_layout.Buttons[i].ActionKind == MenuActionKind.Exit) return i;
-        return _selectedIndex;   // no explicit exit button; leave focus where it is
+            if (_layout.Buttons[i].ActionKind == MenuActionKind.Leave) return i;
+        return _selectedIndex;   // no explicit leave button; leave focus where it is
     }
 
     private IScene? Activate(MenuActionKind kind) => kind switch
     {
-        MenuActionKind.Play             => StartOrResume(),
+        // CONTINUE resumes the saved story; StoryScene falls back to a fresh start
+        // on its own when there is nothing to resume, so no special-casing here.
+        MenuActionKind.Continue         => new StoryScene(),
+        MenuActionKind.NewStory         => new StoryScene(fresh: true),
+        MenuActionKind.Preferences      => new PreferencesScene(),
         MenuActionKind.ToggleFullscreen => ToggleFullscreen(),
-        MenuActionKind.Exit             => ExitScene.Instance,
+        MenuActionKind.Leave            => ExitScene.Instance,
         _                               => null,
     };
-
-    // Enter the ink-driven story. StoryScene resumes from the saved ink state when
-    // one exists and the intro isn't finished; otherwise it starts fresh.
-    private IScene StartOrResume() => new StoryScene();
 
     private IScene? ToggleFullscreen()
     {
@@ -268,11 +263,6 @@ sealed class MainMenuScene : IScene
 
     private string LabelFor(MenuButtonDef def) => def.ActionKind switch
     {
-        // Reflect saved progress: an in-progress story resumes via "CONTINUE".
-        MenuActionKind.Play => (_save != null && !_save.Story.IntroComplete
-                                && !string.IsNullOrEmpty(_save.World.InkState))
-                                   ? "CONTINUE"
-                                   : (string.IsNullOrEmpty(def.Label) ? "PLAY" : def.Label),
         MenuActionKind.ToggleFullscreen => _isFullscreen ? "WINDOWED" : "FULLSCREEN",
         _                               => def.Label,
     };

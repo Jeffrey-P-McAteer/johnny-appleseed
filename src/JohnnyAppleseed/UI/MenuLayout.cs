@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 namespace JohnnyAppleseed.UI;
 
 /// <summary>What activating a menu button does. Parsed from the authored string.</summary>
-enum MenuActionKind { None, Play, ToggleFullscreen, Exit }
+enum MenuActionKind { None, Continue, NewStory, Preferences, ToggleFullscreen, Leave }
 
 /// <summary>
 /// An artist-authored main-menu layout: a backdrop art-set key plus buttons placed
@@ -49,17 +49,20 @@ sealed class MenuButtonDef
     [JsonPropertyName("fontSize")]
     public int FontSize { get; set; }
 
-    /// <summary>Action id: "play", "toggleFullscreen", "exit" (case-insensitive).</summary>
+    /// <summary>Action id: "continue", "new_story", "preferences", "toggleFullscreen",
+    /// "leave" (case-insensitive; "exit" is accepted as an alias for "leave").</summary>
     [JsonPropertyName("action")]
     public string Action { get; set; } = "";
 
     /// <summary>Parsed <see cref="Action"/>; unknown/empty -> <see cref="MenuActionKind.None"/>.</summary>
     public MenuActionKind ActionKind => Action.Trim().ToLowerInvariant() switch
     {
-        "play"             => MenuActionKind.Play,
-        "togglefullscreen" => MenuActionKind.ToggleFullscreen,
-        "exit"             => MenuActionKind.Exit,
-        _                  => MenuActionKind.None,
+        "continue"              => MenuActionKind.Continue,
+        "new_story" or "newstory" => MenuActionKind.NewStory,
+        "preferences"           => MenuActionKind.Preferences,
+        "togglefullscreen"      => MenuActionKind.ToggleFullscreen,
+        "leave" or "exit"       => MenuActionKind.Leave,
+        _                       => MenuActionKind.None,
     };
 }
 
@@ -113,9 +116,10 @@ static class MenuLayoutDatabase
         Backdrop = "graphics/main-menu/backdrop",
         Buttons =
         [
-            new MenuButtonDef { Id = "play",       Label = "PLAY",       X = 0.5f, Y = 0.60f, Action = "play" },
-            new MenuButtonDef { Id = "fullscreen", Label = "FULLSCREEN", X = 0.5f, Y = 0.72f, Action = "toggleFullscreen" },
-            new MenuButtonDef { Id = "exit",       Label = "EXIT",       X = 0.5f, Y = 0.84f, Action = "exit" },
+            new MenuButtonDef { Id = "continue",    Label = "CONTINUE",    X = 0.6f,  Y = 0.45f, Action = "continue" },
+            new MenuButtonDef { Id = "new_story",   Label = "NEW STORY",   X = 0.36f, Y = 0.78f, Action = "new_story" },
+            new MenuButtonDef { Id = "preferences", Label = "PREFERENCES", X = 0.8f,  Y = 0.82f, Action = "preferences" },
+            new MenuButtonDef { Id = "leave",       Label = "LEAVE",       X = 0.1f,  Y = 0.88f, Action = "leave" },
         ],
     };
 }

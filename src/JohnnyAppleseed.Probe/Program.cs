@@ -53,9 +53,9 @@ static class Program
     private static int RunCapture(string[] args)
     {
         string scene   = args.Length > 1 ? args[1].ToLowerInvariant() : "menu";
-        if (scene is not ("menu" or "intro" or "story"))
+        if (scene is not ("menu" or "preferences" or "intro" or "story"))
         {
-            Console.Error.WriteLine($"unknown scene '{scene}'. valid: menu | intro | story");
+            Console.Error.WriteLine($"unknown scene '{scene}'. valid: menu | preferences | intro | story");
             return 2;
         }
         float  seconds = args.Length > 2 && float.TryParse(args[2], out float s) ? s : 1.2f;

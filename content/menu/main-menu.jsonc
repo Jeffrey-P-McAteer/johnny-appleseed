@@ -18,7 +18,7 @@
 //                 scales with any window size / fullscreen
 //       width     optional plate width as a fraction of screen; omit to auto-size
 //       fontSize  optional px size; omit for the default
-//       action    "play" | "toggleFullscreen" | "exit"
+//       action    "continue" | "new_story" | "preferences" | "leave"
 //
 //  Navigation: Up/Down/Left/Right (keyboard or controller) move focus to the
 //  nearest button in that direction, so you can lay buttons out freely - a column,
@@ -27,8 +27,9 @@
 {
   "backdrop": "graphics/main-menu/backdrop",
   "buttons": [
-    { "id": "play",       "label": "PLAY",       "x": 0.5, "y": 0.60, "action": "play" },
-    { "id": "fullscreen", "label": "FULLSCREEN", "x": 0.5, "y": 0.72, "action": "toggleFullscreen" },
-    { "id": "exit",       "label": "EXIT",       "x": 0.5, "y": 0.84, "action": "exit" },
+    { "id": "continue",     "label": "CONTINUE",    "x": 0.6, "y": 0.45, "action": "continue" },
+    { "id": "new_story",    "label": "NEW STORY",   "x": 0.36, "y": 0.78, "action": "new_story" },
+    { "id": "preferences",  "label": "PREFERENCES", "x": 0.8, "y": 0.82, "action": "preferences" },
+    { "id": "leave",        "label": "LEAVE",       "x": 0.1, "y": 0.88, "action": "leave" },
   ]
 }
