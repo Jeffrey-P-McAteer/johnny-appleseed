@@ -375,3 +375,14 @@ testbed/                      local VM helpers for manual cross-platform testing
 | Raylib-cs | 8.0.0 | zlib |
 | Raylib (native) | 6.0 | zlib |
 | .NET Runtime | 9.0 | MIT |
+
+# Research
+
+**Appalacian trail research**
+
+ - https://www.nps.gov/appa/learn/photosmultimedia/photogallery.htm
+ - https://nps.maps.arcgis.com/apps/webappviewer/index.html?id=cea61820e75c4ce997f866eea3aaf5b3
+ - https://commons.wikimedia.org/w/index.php?search=Appalachian&title=Special%3AMediaSearch&type=image
+
+
+
