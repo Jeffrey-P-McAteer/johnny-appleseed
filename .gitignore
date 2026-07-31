@@ -6,6 +6,13 @@ obj/
 # Distribution artifacts (produced by scripts/package.py)
 dist/
 
+# Dev capture screenshots at repo root (probe `capture <scene> [secs] [out.png]`).
+# Real art lives under graphics/, so these root-level patterns won't touch it.
+/capture-*.png
+/*-capture.png
+/menu*.png
+/prefs*.png
+
 # Cross-compile toolchain downloads and build artifacts (produced by scripts/setup-native-libs.py)
 build/
 

@@ -28,6 +28,7 @@ sealed class PreferencesScene : IScene
     private int _focus;             // index into the current tab's focusable rows
     private float[] _glow = Array.Empty<float>();   // per-row, sized to the current tab
     private float _tabGlow;         // focus glow for the active tab header
+    private bool _exit;             // set by the Return button; leaves next frame
 
     // -- layout -----------------------------------------------------------------
     private const int TitleFontSize = 48;
@@ -98,6 +99,11 @@ sealed class PreferencesScene : IScene
         _tabs.Clear();
         _tabs.Add(new Tab("General", general));
         _tabs.Add(new Tab("Weather", weather));
+
+        // Every tab ends with an explicit Return button, so mouse users (and anyone
+        // who doesn't know Esc / gamepad B) always have a visible way back.
+        foreach (Tab t in _tabs)
+            t.Rows.Add(new ActionControl("Return to menu", onActivate: () => _exit = true, hint: "Return"));
     }
 
     // Manual-override selector: index 0 = automatic, then one per Weather value.
@@ -142,6 +148,10 @@ sealed class PreferencesScene : IScene
         if (click && !_onTabs && focusRects.Count > 0 &&
             RectContains(focusRects[Math.Clamp(_focus, 0, focusRects.Count - 1)], mouse))
             rows[focusRow[_focus]].Activate();
+
+        // The Return button (or Esc / gamepad B) leaves to the main menu.
+        if (_exit)
+            return new MainMenuScene();
 
         if (_onTabs != prevOnTabs || _tab != prevTab || _focus != prevFocus)
             Raylib.PlaySound(Assets.Sound(FocusSoundKey));
