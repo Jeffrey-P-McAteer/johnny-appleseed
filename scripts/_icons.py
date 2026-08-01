@@ -8,30 +8,30 @@
 """
 Johnny Appleseed - icon builder.
 
-Rasterises a source SVG into the raster formats each platform's build pipeline
-needs to embed an application / window icon:
+Turns a source image into the raster formats each platform's build pipeline needs
+to embed an application / window icon:
 
     icon.png    -> embedded resource, used at runtime via Raylib.SetWindowIcon
                   (window title bar on Windows + X11)
     icon.ico    -> <ApplicationIcon> - stamped into the Windows apphost .exe
     AppIcon.icns-> copied into JohnnyAppleseed.app/Contents/Resources (Finder/Dock)
 
+Accepted sources (see load_source):
+    .svg  - rasterised by the small built-in vector renderer below.
+    .xcf  - composited by GIMP via the sibling _xcf.py (the project's icon source
+            of truth is graphics/icon.xcf).
+    .png/.jpg/... - loaded directly with Pillow.
+
 Design notes
 ------------
-Raylib cannot load SVG, so the vector source must be rasterised ahead of time.
-Rather than pull in a heavy native SVG stack (cairo/librsvg), this module ships a
-small, dependency-free rasteriser for the *linear* SVG path subset
-(M/m L/l H/h V/v Z/z) - which is all a pixel-art icon needs - and fills the
-resulting polygons with Pillow (already a packaging dependency).  Because the
-source grid (e.g. 14x16) divides evenly into every icon size we emit, the scaled
-blocks land on exact pixel boundaries and stay crisp at every resolution.
-
-This mirrors scripts/_dmg.py: reverse-implement just enough of a format in pure
-Python so packaging has zero system dependencies and works identically on every
-build host.
+Raylib cannot load SVG/XCF, so the source must be rasterised ahead of time. For
+SVG, rather than pull in a heavy native stack (cairo/librsvg) this module ships a
+small, dependency-free rasteriser for the *linear* path subset
+(M/m L/l H/h V/v Z/z) and fills the polygons with Pillow. For XCF it defers to
+GIMP (the real tool for its own format, mirroring scripts/aseprite-export.py).
 
 CLI:
-    uv run scripts/_icons.py graphics/icon.svg \
+    uv run scripts/_icons.py graphics/icon.xcf \
         --png obj/icon.png --png-size 256 --ico obj/icon.ico --icns obj/AppIcon.icns
 """
 
@@ -218,9 +218,49 @@ def rasterize(paths, viewbox, size: int):
     return img
 
 
-def render(svg: str | Path, size: int):
-    paths, viewbox = load_svg(svg)
-    return rasterize(paths, viewbox, size)
+def _fit(img, size: int):
+    """Aspect-preserve `img` into a transparent `size`x`size` RGBA canvas,
+    centred - the same framing the SVG rasteriser produces, so raster and vector
+    sources yield interchangeable icons."""
+    from PIL import Image
+
+    img = img.convert("RGBA")
+    w, h = img.size
+    scale = size / max(w, h)
+    nw, nh = max(1, round(w * scale)), max(1, round(h * scale))
+    resized = img.resize((nw, nh), Image.LANCZOS)
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    canvas.paste(resized, ((size - nw) // 2, (size - nh) // 2), resized)
+    return canvas
+
+
+def load_source(src: str | Path):
+    """Return a `render(size) -> RGBA Image` function for a source of any kind.
+
+    - `.svg`  : rasterised per size from the vector paths (crisp at every size).
+    - `.xcf`  : composited once by GIMP (via _xcf.py), then scaled per size.
+    - other   : loaded once with Pillow (`.png`/`.jpg`/...), then scaled per size.
+
+    So the icon pipeline works unchanged whether the source of truth is an SVG,
+    a GIMP document, or a plain raster.
+    """
+    p = str(src).lower()
+    if p.endswith(".svg"):
+        paths, viewbox = load_svg(src)
+        return lambda size: rasterize(paths, viewbox, size)
+
+    if p.endswith(".xcf"):
+        import _xcf  # sibling module; GIMP-backed .xcf compositor
+        base = _xcf.to_image(src)
+    else:
+        from PIL import Image
+        base = Image.open(src).convert("RGBA")
+    return lambda size: _fit(base, size)
+
+
+def render(src: str | Path, size: int):
+    """Render any supported source to a single `size`x`size` RGBA image."""
+    return load_source(src)(size)
 
 
 def _png_bytes(img) -> bytes:
@@ -231,22 +271,22 @@ def _png_bytes(img) -> bytes:
 
 # -- format writers --------------------------------------------------------------
 
-def write_png(svg: str | Path, out: Path, size: int = 256) -> Path:
+def write_png(src: str | Path, out: Path, size: int = 256) -> Path:
     out.parent.mkdir(parents=True, exist_ok=True)
-    render(svg, size).save(out, "PNG")
+    load_source(src)(size).save(out, "PNG")
     return out
 
 
-def write_ico(svg: str | Path, out: Path,
+def write_ico(src: str | Path, out: Path,
               sizes=(16, 32, 48, 64, 128, 256)) -> Path:
     """Multi-resolution Windows .ico, embedded into the apphost via ApplicationIcon."""
     out.parent.mkdir(parents=True, exist_ok=True)
-    base = render(svg, max(sizes))
+    base = load_source(src)(max(sizes))
     base.save(out, format="ICO", sizes=[(s, s) for s in sizes])
     return out
 
 
-def write_icns(svg: str | Path, out: Path) -> Path:
+def write_icns(src: str | Path, out: Path) -> Path:
     """
     Hand-rolled Apple .icns with PNG-encoded entries at several sizes.
 
@@ -258,9 +298,10 @@ def write_icns(svg: str | Path, out: Path) -> Path:
         (b"icp4", 16), (b"icp5", 32), (b"ic07", 128),
         (b"ic08", 256), (b"ic09", 512), (b"ic10", 1024),
     ]
+    src_fn = load_source(src)
     body = b""
     for ostype, sz in entries:
-        png = _png_bytes(render(svg, sz))
+        png = _png_bytes(src_fn(sz))
         body += ostype + struct.pack(">I", len(png) + 8) + png
 
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -271,8 +312,8 @@ def write_icns(svg: str | Path, out: Path) -> Path:
 # -- CLI -------------------------------------------------------------------------
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Rasterise an SVG into icon formats")
-    ap.add_argument("svg", help="source SVG path")
+    ap = argparse.ArgumentParser(description="Render a source image into icon formats")
+    ap.add_argument("source", help="source image path (.svg / .xcf / .png / .jpg ...)")
     ap.add_argument("--png", help="write a PNG here")
     ap.add_argument("--png-size", type=int, default=256, help="PNG edge length (px)")
     ap.add_argument("--ico", help="write a Windows .ico here")
@@ -280,11 +321,11 @@ def main() -> None:
     args = ap.parse_args()
 
     if args.png:
-        print(f"  icon -> {write_png(args.svg, Path(args.png), args.png_size)}")
+        print(f"  icon -> {write_png(args.source, Path(args.png), args.png_size)}")
     if args.ico:
-        print(f"  icon -> {write_ico(args.svg, Path(args.ico))}")
+        print(f"  icon -> {write_ico(args.source, Path(args.ico))}")
     if args.icns:
-        print(f"  icon -> {write_icns(args.svg, Path(args.icns))}")
+        print(f"  icon -> {write_icns(args.source, Path(args.icns))}")
 
 
 if __name__ == "__main__":

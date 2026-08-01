@@ -83,12 +83,14 @@
     Every file under the repo's audio/ and graphics/ trees is compiled in as an
     embedded resource, so the shipped single-file binary carries its assets with
     no loose folder alongside it. The logical resource name mirrors the source
-    path (e.g. "graphics/icon.svg", "audio/click.mp3"); Assets.cs reads them via
+    path (e.g. "graphics/icon.png", "audio/click.mp3"); Assets.cs reads them via
     the same Load*FromMemory idiom ParallaxBackground uses for its shader.
     Existence-gated so a checkout without these folders still builds.
 
-    NOTE: the runtime window/app icon is *generated* from graphics/icon.svg by the
-    GenerateIcons target below (Raylib can't load SVG); that PNG/ICO lands in obj/.
+    NOTE: some graphics are *generated* from a source the game can't read and
+    embedded under a game-loadable key that lands in obj/: graphics/icon.xcf ->
+    graphics/icon.png (+ .jpg) via GenerateXcfArt; *.aseprite -> .png/.gif via
+    GenerateAsepriteArt; the Windows .exe .ico via GenerateIcons.
   -->
   <ItemGroup>
     <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\audio\**\*"
@@ -112,10 +114,11 @@
                       Condition="Exists('$(MSBuildThisFileDirectory)..\..\content')"
                       LogicalName="content/%(RecursiveDir)%(Filename)%(Extension)" />
     <!-- Empty-folder placeholders are for repo structure only; never embed them.
-         Raw *.aseprite sources aren't shipped either: the GenerateAsepriteArt
-         target below rasterises them to graphics/<name>.png/.gif (into obj/) and
-         embeds those instead - the game can't read the .aseprite format. -->
-    <EmbeddedResource Remove="$(MSBuildThisFileDirectory)..\..\audio\**\.gitkeep;$(MSBuildThisFileDirectory)..\..\graphics\**\.gitkeep;$(MSBuildThisFileDirectory)..\..\graphics\**\*.aseprite" />
+         Raw *.aseprite and *.xcf sources aren't shipped either: the
+         GenerateAsepriteArt / GenerateXcfArt targets below rasterise them to
+         graphics/<name>.png (+ .gif / .jpg) into obj/ and embed those instead -
+         the game can't read the .aseprite or .xcf formats. -->
+    <EmbeddedResource Remove="$(MSBuildThisFileDirectory)..\..\audio\**\.gitkeep;$(MSBuildThisFileDirectory)..\..\graphics\**\.gitkeep;$(MSBuildThisFileDirectory)..\..\graphics\**\*.aseprite;$(MSBuildThisFileDirectory)..\..\graphics\**\*.xcf" />
   </ItemGroup>
 
   <!-- Let the debug hardware-probe reuse internal classes (InputSystem, AppData,
@@ -222,48 +225,36 @@
 
   <!--
     ==========================================================================
-    Icon generation: graphics/icon.svg -> obj/{icon.png, icon.ico}
+    Windows .exe icon: graphics/icon.xcf -> obj/icon.ico
     ==========================================================================
-    Raylib cannot load SVG, so scripts/_icons.py rasterises the vector source to
-    the raster formats the icon pipeline needs, writing them into the gitignored
-    intermediate dir (obj/), alongside the generated BuildInfo.cs:
+    The runtime window icon (graphics/icon.png) is produced by the GenerateXcfArt
+    target below, straight from graphics/icon.xcf. Here we additionally render that
+    same source to a multi-resolution Windows .ico and stamp it into the apphost
+    .exe via <ApplicationIcon> (Explorer / taskbar). Cross-platform: the .NET SDK's
+    managed PE resource writer stamps the win apphost even when publishing from
+    Linux/macOS.
 
-      icon.png  -> embedded resource; Game.cs calls Raylib.SetWindowIcon with it
-                  (window title bar on Windows + X11).
-      icon.ico  -> <ApplicationIcon>; the .NET SDK stamps it into the Windows
-                  apphost .exe (Explorer / taskbar). Cross-platform: the SDK's
-                  managed PE resource writer stamps the win apphost even when
-                  publishing from Linux/macOS.
-
-    Best-effort: the <Exec> needs `uv` + Pillow. If they're unavailable it is
-    ignored (IgnoreExitCode) and the Exists()-gated items below simply don't apply
-    - the game builds fine, just without a custom icon. The macOS .app icon
-    (.icns) is generated separately by scripts/package.py at packaging time.
+    scripts/_icons.py composites the .xcf through GIMP (see scripts/_xcf.py) before
+    encoding the .ico. Best-effort: the <Exec> needs `uv` + Pillow + GIMP. If any
+    is unavailable it is ignored (IgnoreExitCode) and the Exists()-gated
+    ApplicationIcon simply is not set - the game builds fine, just without the
+    custom .exe icon. The macOS .app icon (.icns) is generated separately by
+    scripts/package.py at packaging time, also from graphics/icon.xcf.
   -->
-  <!-- Runs before AssignTargetPaths so the generated icon.png flows through the
-       normal resource-naming pipeline (CreateManifestResourceNames honours its
-       LogicalName). Adding an EmbeddedResource in a BeforeTargets=CoreCompile
-       target is too late - resource names are already assigned by then. -->
   <Target Name="GenerateIcons" BeforeTargets="AssignTargetPaths;CoreCompile">
     <PropertyGroup>
-      <_IconSvg>$(MSBuildThisFileDirectory)..\..\graphics\icon.svg</_IconSvg>
+      <_IconSrc>$(MSBuildThisFileDirectory)..\..\graphics\icon.xcf</_IconSrc>
       <_IconScript>$(MSBuildThisFileDirectory)..\..\scripts\_icons.py</_IconScript>
-      <_IconPng>$(IntermediateOutputPath)icon.png</_IconPng>
       <_IconIco>$(IntermediateOutputPath)icon.ico</_IconIco>
     </PropertyGroup>
 
     <MakeDir Directories="$(IntermediateOutputPath)" />
 
-    <Exec Command="uv run &quot;$(_IconScript)&quot; &quot;$(_IconSvg)&quot; --png &quot;$(_IconPng)&quot; --png-size 256 --ico &quot;$(_IconIco)&quot;"
-          Condition="Exists('$(_IconSvg)') And Exists('$(_IconScript)')"
+    <Exec Command="uv run &quot;$(_IconScript)&quot; &quot;$(_IconSrc)&quot; --ico &quot;$(_IconIco)&quot;"
+          Condition="Exists('$(_IconSrc)') And Exists('$(_IconScript)')"
           IgnoreExitCode="true"
           StandardOutputImportance="low"
           StandardErrorImportance="low" />
-
-    <!-- Embed the generated window icon (only if generation succeeded). -->
-    <ItemGroup Condition="Exists('$(_IconPng)')">
-      <EmbeddedResource Include="$(_IconPng)" LogicalName="graphics/icon.png" />
-    </ItemGroup>
 
     <!-- Stamp the Windows apphost .exe icon (only if generation succeeded). -->
     <PropertyGroup Condition="Exists('$(_IconIco)')">
@@ -318,6 +309,74 @@
       <EmbeddedResource Include="@(_AsepriteArt)"
                         LogicalName="graphics/%(_AsepriteArt.RecursiveDir)%(_AsepriteArt.Filename)%(_AsepriteArt.Extension)" />
     </ItemGroup>
+  </Target>
+
+  <!--
+    ==========================================================================
+    GIMP art  ->  embedded PNG / JPG
+    ==========================================================================
+    Rasterises every graphics/**/*.xcf into obj/xcf/ (gitignored) and embeds the
+    results under both "graphics/<name>.png" (alpha preserved) and
+    "graphics/<name>.jpg" (flattened). So graphics/icon.xcf becomes the embedded
+    graphics/icon.png the game already loads - no game code changes. The raw .xcf
+    is not shipped (Removed from the embed glob above); the game can't read it.
+
+    scripts/_xcf.py composites each .xcf with GIMP (the real tool for its own
+    layered format - same choice GenerateAsepriteArt makes for .aseprite). Best-
+    effort: it needs `uv` + GIMP (found via GIMP_BIN or `gimp` on PATH). If GIMP
+    isn't installed the exporter prints a notice and exits 0 (IgnoreExitCode), so
+    `dotnet build` still succeeds; the runtime icon load is Exists()-gated.
+
+    Same BeforeTargets / qualified-metadata rationale as GenerateAsepriteArt: the
+    EmbeddedResource items must be added before AssignTargetPaths so their
+    LogicalName flows through resource naming, and staging into a private item type
+    (_XcfArt) avoids the CS1508 cross-batching trap.
+  -->
+  <Target Name="GenerateXcfArt" BeforeTargets="AssignTargetPaths;CoreCompile">
+    <PropertyGroup>
+      <_GfxDir>$(MSBuildThisFileDirectory)..\..\graphics</_GfxDir>
+      <_XcfScript>$(MSBuildThisFileDirectory)..\..\scripts\_xcf.py</_XcfScript>
+      <_XcfArtDir>$(IntermediateOutputPath)xcf</_XcfArtDir>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_XcfSrc Include="$(_GfxDir)\**\*.xcf" />
+    </ItemGroup>
+
+    <MakeDir Directories="$(_XcfArtDir)" Condition="'@(_XcfSrc)' != ''" />
+
+    <Exec Command="uv run &quot;$(_XcfScript)&quot; --graphics-dir &quot;$(_GfxDir)&quot; --outdir &quot;$(_XcfArtDir)&quot;"
+          Condition="'@(_XcfSrc)' != '' And Exists('$(_XcfScript)')"
+          IgnoreExitCode="true"
+          StandardOutputImportance="low"
+          StandardErrorImportance="low" />
+
+    <ItemGroup Condition="Exists('$(_XcfArtDir)')">
+      <_XcfArt Include="$(_XcfArtDir)\**\*.png;$(_XcfArtDir)\**\*.jpg" />
+      <EmbeddedResource Include="@(_XcfArt)"
+                        LogicalName="graphics/%(_XcfArt.RecursiveDir)%(_XcfArt.Filename)%(_XcfArt.Extension)" />
+    </ItemGroup>
+  </Target>
+
+  <!--
+    ==========================================================================
+    Asset-source collision guard
+    ==========================================================================
+    Fails the build (this Exec is NOT IgnoreExitCode) when two source files under
+    graphics/ share a base name and at least one is a generated-asset source
+    (.xcf / .aseprite / .svg) - e.g. graphics/a.svg + graphics/a.xcf - so they can
+    never silently overwrite each other's generated output. See
+    scripts/check-asset-collisions.py for the exact rule.
+  -->
+  <Target Name="ValidateAssetSources" BeforeTargets="AssignTargetPaths;CoreCompile"
+          Condition="Exists('$(MSBuildThisFileDirectory)..\..\graphics')">
+    <PropertyGroup>
+      <_CollisionScript>$(MSBuildThisFileDirectory)..\..\scripts\check-asset-collisions.py</_CollisionScript>
+      <_GfxDir>$(MSBuildThisFileDirectory)..\..\graphics</_GfxDir>
+    </PropertyGroup>
+    <Exec Command="uv run &quot;$(_CollisionScript)&quot; &quot;$(_GfxDir)&quot;"
+          Condition="Exists('$(_CollisionScript)')"
+          StandardOutputImportance="low" />
   </Target>
 
   <!--

@@ -1,5 +1,4 @@
 #!/usr/bin/env -S uv run --script
-#
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
@@ -17,10 +16,13 @@ import threading
 import os
 import io
 import json
+import tempfile
+import subprocess
 
 PORT = 8000
 
 ROOT = pathlib.Path(__file__).parent.resolve()
+TEMP_FOLDER = tempfile.gettempdir()
 
 # Main website
 WEB_ROOT = ROOT
@@ -28,8 +30,28 @@ WEB_ROOT = ROOT
 # Additional virtual mounts
 MOUNTS = {
     "/graphics": ROOT.parent / "graphics",
-    #"/historic-progress": ROOT.parent / "historic-progress",
+    "/historic-progress": ROOT.parent / "historic-progress",
 }
+
+def startup_tmp_asset_renders():
+    en = dict(os.environ)
+
+    en.pop('VIRTUAL_ENV', None)
+    en.pop('PYTHONHOME', None)
+    en.pop('PYTHONPATH', None)
+    en.pop('PYTHONSAFEPATH', None)
+    en['PATH'] = os.pathsep.join(en['PATH'].split(os.pathsep)[1:])
+
+    en['GIMP_INPUT'] = os.path.join(WEB_ROOT, '..', 'graphics', 'icon.xcf')
+    en['GIMP_OUTPUT'] = os.path.join(TEMP_FOLDER, 'icon.png')
+
+    if not os.path.exists(en['GIMP_OUTPUT']) or os.path.getmtime(en['GIMP_INPUT']) > os.path.getmtime(en['GIMP_OUTPUT']):
+        subprocess.run([
+            'gimp', '--no-interface',
+                    '--batch-interpreter=python-fu-eval',
+                    '-b', "exec(open('/j/claude/johnny-appleseed/scripts/gimp-automata/export-png.py').read())",
+                    '--quit',
+        ], env=en, check=True)
 
 
 class VirtualDirectoryHandler(http.server.SimpleHTTPRequestHandler):
@@ -37,7 +59,11 @@ class VirtualDirectoryHandler(http.server.SimpleHTTPRequestHandler):
         # Remove query string and fragment
         path = urllib.parse.urlparse(path).path
 
-        # Check mounted directories first
+        # Special-case grpahics/icon.png, same as the .github/workflows/static.yml
+        if path == 'graphics/icon.png' or path == '/graphics/icon.png':
+            return os.path.join(TEMP_FOLDER, 'icon.png')
+
+        # Check mounted directories
         for prefix, directory in MOUNTS.items():
             if path == prefix or path.startswith(prefix + "/"):
                 relative = path[len(prefix):].lstrip("/")
@@ -110,6 +136,8 @@ def open_browser():
 
 def main():
     os.chdir(WEB_ROOT)
+
+    startup_tmp_asset_renders()
 
     with socketserver.ThreadingTCPServer(("127.0.0.1", PORT), VirtualDirectoryHandler) as httpd:
         print(f"Serving on http://localhost:{PORT}")

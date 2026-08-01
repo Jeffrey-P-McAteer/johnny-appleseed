@@ -50,7 +50,10 @@ REPO_ROOT   = Path(__file__).resolve().parent.parent
 PROJECT_CS  = REPO_ROOT / "src" / "JohnnyAppleseed" / "JohnnyAppleseed.csproj"
 DIST_DIR    = REPO_ROOT / "dist"
 NATIVE_DIR  = REPO_ROOT / "src" / "JohnnyAppleseed" / "runtimes"
-ICON_SVG    = REPO_ROOT / "graphics" / "icon.svg"
+# Icon source of truth: a GIMP document. _icons.write_icns renders it (via GIMP,
+# see scripts/_xcf.py) into the macOS .app .icns. Swap the extension here if the
+# source format ever changes - .svg / .png / .jpg all work too.
+ICON_SOURCE = REPO_ROOT / "graphics" / "icon.xcf"
 
 APP_NAME      = "JohnnyAppleseed"
 APP_ID        = "com.johnnyseed.game"
@@ -221,13 +224,13 @@ def package_macos(target_name: str, rid: str) -> None:
         shutil.copy2(binary, app_binary)
         app_binary.chmod(app_binary.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
-        # App icon: rasterise graphics/icon.svg -> Contents/Resources/AppIcon.icns
-        # (Raylib can't load SVG; Finder/Dock read the .icns from the bundle).
-        # Best-effort - a missing/failed icon must not fail packaging.
+        # App icon: render graphics/icon.xcf -> Contents/Resources/AppIcon.icns
+        # (Finder/Dock read the .icns from the bundle). Best-effort - a
+        # missing/failed icon (e.g. GIMP not installed) must not fail packaging.
         icon_file = None
-        if ICON_SVG.exists():
+        if ICON_SOURCE.exists():
             try:
-                write_icns(ICON_SVG, res_dir / "AppIcon.icns")
+                write_icns(ICON_SOURCE, res_dir / "AppIcon.icns")
                 icon_file = "AppIcon"
             except Exception as e:
                 print(f"  [warn] .icns generation failed ({e}); .app will use the default icon")

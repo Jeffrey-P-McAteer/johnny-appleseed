@@ -29,6 +29,11 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gimp
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -36,10 +41,18 @@ jobs:
       - name: Copy assets into www folder
         run: |
           mkdir -p www/graphics
-          #mkdir -p www/historic-progress
+          mkdir -p www/historic-progress
 
           cp -r graphics/* www/graphics/ || true
-          #cp -r historic-progress/* www/historic-progress/ || true
+          cp -r historic-progress/* www/historic-progress/ || true
+
+          # .xcf to .png because that's easier to reference as a one-off generation.
+          GIMP_INPUT=graphics/icon.xcf \
+          GIMP_OUTPUT=www/graphics/icon.png \
+          gimp --no-interface \
+               --batch-interpreter=python-fu-eval \
+               -b "exec(open('scripts/gimp-automata/export-png.py').read())" \
+               --quit
 
           find www/ -type f \
             ! -name "site-index.json" \
