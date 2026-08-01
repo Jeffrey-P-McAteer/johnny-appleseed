@@ -3,6 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = [
 #   "pillow>=10.0",
+#   "pycdlib>=1.14.0",
 #   "ds-store>=1.3",
 #   "mac-alias>=2.2",
 # ]
@@ -31,17 +32,15 @@ import platform
 import plistlib
 import shutil
 import stat
-import struct
 import subprocess
 import sys
-import tarfile
 import tempfile
 import urllib.request
 import zipfile
 from pathlib import Path
 
-# Pure-Python HFS+/UDIF DMG builder - no system dependencies
-from _dmg import build_dmg as _build_dmg_hfs
+import importlib.util
+
 # SVG -> .icns rasteriser (shared with the MSBuild icon pipeline)
 from _icons import write_icns
 
@@ -56,6 +55,26 @@ ICON_SVG    = REPO_ROOT / "graphics" / "icon.svg"
 APP_NAME      = "JohnnyAppleseed"
 APP_ID        = "com.johnnyseed.game"
 APP_VERSION   = "1.0.0"
+
+# -- DMG (macOS) layout configuration -----------------------------------------
+# All .dmg building is delegated to build/dmg-constructor.py, a validated,
+# pure-Python UDIF/UDF builder that needs no macOS tooling.
+DMG_CONSTRUCTOR_PY = REPO_ROOT / "build" / "dmg-constructor.py"
+
+# Finder background shown behind the .dmg window. This is a PLACEHOLDER; an
+# artist will supply a purpose-built image later - just repoint this path.
+DMG_BACKGROUND      = REPO_ROOT / "graphics" / "view-of-the-natural-bridge-dc4df5.jpg"
+
+# Finder window geometry and icon layout. Tune these freely.
+DMG_WINDOW_POSITION = (200, 120)   # (x, y) top-left of the Finder window, in points
+DMG_WINDOW_SIZE     = (740, 500)   # (width, height) of the window content, in points
+DMG_ICON_SIZE       = 128          # icon size, in points
+DMG_TEXT_SIZE       = 16           # icon label text size, in points
+# Positions keyed by the visible top-level item name (points, window-relative).
+DMG_ICON_POSITIONS  = {
+    f"{APP_NAME}.app": (185, 220),
+    "Applications":    (555, 220),
+}
 
 
 # Map: (target_os, arch) -> .NET RID
@@ -250,23 +269,12 @@ def package_macos(target_name: str, rid: str) -> None:
                 print("  [warn] codesign not found - .app will be unsigned (Gatekeeper may block it)")
 
         # -- DMG staging area -------------------------------------------------
+        # dmg-constructor builds the Finder background, .DS_Store, icon layout,
+        # and the drag-to-Applications shortcut itself, so the staging tree only
+        # needs to contain the .app bundle.
         staging = tmp_path / "staging"
         staging.mkdir()
-
-        # Copy the .app
-        shutil.copytree(app_bundle, staging / f"{APP_NAME}.app")
-
-        # Symlink to /Applications
-        (staging / "Applications").symlink_to("/Applications")
-
-        # Background image in a hidden folder (Finder convention)
-        bg_dir = staging / ".background"
-        bg_dir.mkdir()
-        bg_image = bg_dir / "background.png"
-        create_dmg_background(bg_image, target_name)
-
-        # .DS_Store for Finder window layout
-        write_ds_store(staging / ".DS_Store", bg_image_relative=".background/background.png")
+        shutil.copytree(app_bundle, staging / f"{APP_NAME}.app", symlinks=True)
 
         # -- create the DMG ---------------------------------------------------
         actual_out = create_dmg(staging, dmg_path, label=APP_NAME)
@@ -276,270 +284,59 @@ def package_macos(target_name: str, rid: str) -> None:
 
 # -- DMG creation helpers ------------------------------------------------------
 
-def create_dmg(staging: Path, output: Path, label: str) -> Path:
+def _load_dmg_constructor():
+    """Import build/dmg-constructor.py as a module.
+
+    It lives outside scripts/ and its filename contains a hyphen, so a plain
+    `import` won't reach it - load it by path instead.
     """
-    Create a .dmg from a staging directory.  Returns the output path.
+    spec = importlib.util.spec_from_file_location("dmg_constructor", DMG_CONSTRUCTOR_PY)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load DMG builder at {DMG_CONSTRUCTOR_PY}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
-    Priority order:
-      macOS  -> hdiutil   (compressed UDZO, highest quality)
-      Linux  -> mkisofs   (cdrtools, HFS+/ISO hybrid; install: paru -S cdrtools)
-      any    -> pure-Python HFS+/UDIF builder (zero system dependencies)
+
+def create_dmg(source_dir: Path, output: Path, label: str) -> Path:
     """
-    if platform.system() == "Darwin":
-        try:
-            _create_dmg_hdiutil(staging, output, label)
-            return output
-        except Exception as e:
-            print(f"  [warn] hdiutil failed ({e}); falling back to Python builder")
-    else:
-        # Try mkisofs (cdrtools) first - it handles the full HFS+ filesystem
-        # creation and file copying in one step, with no root access required.
-        mkisofs = shutil.which("mkisofs") or shutil.which("genisoimage")
-        if mkisofs:
-            try:
-                _create_dmg_mkisofs(mkisofs, staging, output, label)
-                return output
-            except Exception as e:
-                print(f"  [warn] {Path(mkisofs).name} failed ({e}); falling back to Python builder")
+    Build a real, mountable .dmg from source_dir using build/dmg-constructor.py.
 
-    # Pure-Python fallback - zero system dependencies, works everywhere.
-    print("  [info] using pure-Python HFS+/UDIF builder")
-    _build_dmg_hfs(staging, output, label)
-    return output
-
-
-def _create_dmg_mkisofs(tool: str, staging: Path, output: Path, label: str) -> None:
+    dmg-constructor is a validated, pure-Python UDIF/UDF builder that needs no
+    macOS tooling (no hdiutil, no mkisofs) and works identically on Windows,
+    Linux, and macOS. It writes an actual filesystem into the image - the
+    failure mode of the previous builders was emitting a container whose
+    partition held no mountable filesystem - and also embeds the Finder
+    background image, positions the icons, and adds the drag-to-Applications
+    shortcut itself. Layout is driven by the DMG_* globals above.
     """
-    Create a macOS-compatible HFS+/ISO hybrid disk image using mkisofs (cdrtools).
+    dmgc = _load_dmg_constructor()
 
-    cdrtools mkisofs embeds a proper HFS+ partition inside an ISO 9660 container.
-    macOS Disk Arbitration mounts the HFS+ partition natively, giving the same
-    drag-to-Applications Finder window experience as a native UDIF DMG.
-    Symlinks, hidden files (.DS_Store, .background), and file permissions are
-    all preserved via the -apple and -probe flags.
-    """
-    # Label max 27 chars for HFS volume name
-    vol = label[:27]
-    subprocess.run(
-        [
-            tool,
-            "-V", vol,      # volume name
-            "-D",           # disable deep directory relocation
-            "-hfs",         # embed an HFS+ partition
-            "-mac-name",    # use Mac-style file name encoding
-            "-no-pad",      # omit 300-sector ISO padding at end
-            "-apple",       # Apple ISO 9660 extensions (preserves symlinks, FinderInfo)
-            "-probe",       # probe file type / creator automatically
-            "-o", str(output),
-            str(staging),
-        ],
-        check=True,
-        capture_output=True,
-    )
+    win_x, win_y = DMG_WINDOW_POSITION
+    win_w, win_h = DMG_WINDOW_SIZE
 
-
-def _create_dmg_hdiutil(staging: Path, output: Path, label: str) -> None:
-    with tempfile.NamedTemporaryFile(suffix=".dmg", delete=False) as tmp:
-        rw_dmg = tmp.name
-
-    size_mb = max(256, sum(f.stat().st_size for f in staging.rglob("*") if f.is_file()) // (1024 * 1024) + 80)
-
-    subprocess.run([
-        "hdiutil", "create",
-        "-srcfolder", str(staging),
-        "-volname", label,
-        "-fs", "HFS+",
-        "-fsargs", "-c c=64,a=16,b=16",
-        "-format", "UDRW",
-        "-size", f"{size_mb}m",
-        rw_dmg,
-    ], check=True, capture_output=True)
-
-    if output.exists():
-        output.unlink()
-    subprocess.run([
-        "hdiutil", "convert", rw_dmg,
-        "-format", "UDZO",
-        "-imagekey", "zlib-level=9",
-        "-o", str(output),
-    ], check=True, capture_output=True)
-
-    os.unlink(rw_dmg)
-
-
-
-
-# -- DMG background image ------------------------------------------------------
-
-def create_dmg_background(dest: Path, target_name: str) -> None:
-    """Generate a 540x380 background PNG with drag-to-Applications instructions."""
-    try:
-        from PIL import Image, ImageDraw, ImageFont
-    except ImportError:
-        # Pillow unavailable - write a 1x1 transparent placeholder
-        dest.write_bytes(_minimal_png())
-        return
-
-    W, H = 540, 380
-    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-
-    # Gradient background (dark blue -> deep purple)
-    for y in range(H):
-        t = y / H
-        r = int(8  + t * 12)
-        g = int(8  + t * 4)
-        b = int(30 + t * 30)
-        draw.line([(0, y), (W, y)], fill=(r, g, b, 255))
-
-    # Round-rect panel border
-    draw.rounded_rectangle([(10, 10), (W - 10, H - 10)],
-                            radius=18, outline=(255, 210, 80, 60), width=1)
-
-    # Title
-    font_big = _get_font(size=28)
-    font_med = _get_font(size=16)
-    font_sml = _get_font(size=13)
-
-    title = "JOHNNY APPLESEED"
-    draw.text((W // 2, 52), title, fill=(255, 210, 80, 255),
-              font=font_big, anchor="mm")
-    draw.line([(W // 2 - 120, 72), (W // 2 + 120, 72)],
-              fill=(255, 210, 80, 60), width=1)
-
-    # .app box (left)
-    app_cx, app_cy = 155, 210
-    _draw_icon_box(draw, app_cx, app_cy, "JohnnyAppleseed\n.app", font_sml)
-
-    # Applications box (right)
-    apl_cx, apl_cy = 385, 210
-    _draw_icon_box(draw, apl_cx, apl_cy, "Applications", font_sml,
-                   fill=(60, 90, 160, 160))
-
-    # Arrow from .app -> Applications
-    ax0, ay = app_cx + 58, app_cy
-    ax1     = apl_cx - 58
-    _draw_arrow(draw, ax0, ay, ax1, ay)
-
-    # Instruction text
-    draw.text((W // 2, H - 52),
-              "Drag Johnny Appleseed into Applications to install",
-              fill=(200, 200, 220, 230), font=font_med, anchor="mm")
-    draw.text((W // 2, H - 30),
-              target_name,
-              fill=(120, 120, 140, 160), font=font_sml, anchor="mm")
-
-    img.save(dest, "PNG")
-
-
-def _draw_icon_box(draw, cx: int, cy: int, label: str, font,
-                   fill=(40, 60, 40, 160)) -> None:
-    half = 46
-    draw.rounded_rectangle(
-        [(cx - half, cy - half), (cx + half, cy + half)],
-        radius=14, fill=fill, outline=(180, 180, 220, 120), width=1)
-    # Draw label lines centred under the box (multiline anchor unsupported)
-    lines = label.split("\n")
-    line_h = 15
-    y = cy + half + 8
-    for line in lines:
-        try:
-            bbox = draw.textbbox((0, 0), line, font=font)
-            lw = bbox[2] - bbox[0]
-        except Exception:
-            lw = len(line) * 7
-        draw.text((cx - lw // 2, y), line, fill=(200, 200, 220, 230), font=font)
-        y += line_h
-
-
-def _draw_arrow(draw, x0: int, y0: int, x1: int, y1: int) -> None:
-    col = (200, 200, 200, 200)
-    draw.line([(x0, y0), (x1, y1)], fill=col, width=3)
-    # Arrowhead
-    aw, ah = 14, 9
-    draw.polygon([
-        (x1, y0),
-        (x1 - aw, y0 - ah),
-        (x1 - aw, y0 + ah),
-    ], fill=col)
-
-
-def _get_font(size: int):
-    from PIL import ImageFont
-    # Try common system fonts in order of preference
-    candidates = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-        "/System/Library/Fonts/Helvetica.ttc",
-        "C:\\Windows\\Fonts\\arial.ttf",
+    argv = [
+        str(source_dir), str(output),
+        "--volume-name", label,
+        "--window-position", f"{win_x},{win_y}",
+        "--window-size", f"{win_w}x{win_h}",
+        "--icon-size", str(DMG_ICON_SIZE),
+        "--text-size", str(DMG_TEXT_SIZE),
+        "--applications-symlink",
     ]
-    for path in candidates:
-        if os.path.exists(path):
-            try:
-                return ImageFont.truetype(path, size)
-            except Exception:
-                continue
-    return ImageFont.load_default()
 
+    if DMG_BACKGROUND.is_file():
+        argv += ["--background", str(DMG_BACKGROUND)]
+    else:
+        print(f"  [warn] DMG background image not found: {DMG_BACKGROUND} - building without one")
 
-def _minimal_png() -> bytes:
-    """Return a 1x1 transparent PNG as bytes (no Pillow required)."""
-    import zlib, struct as st
-    def chunk(tag: bytes, data: bytes) -> bytes:
-        c = zlib.crc32(tag + data) & 0xFFFFFFFF
-        return st.pack(">I", len(data)) + tag + data + st.pack(">I", c)
-    sig    = b"\x89PNG\r\n\x1a\n"
-    ihdr   = chunk(b"IHDR", st.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0))
-    idat   = chunk(b"IDAT", zlib.compress(b"\x00\x00\x00\x00"))
-    iend   = chunk(b"IEND", b"")
-    return sig + ihdr + idat + iend
+    for name, (x, y) in DMG_ICON_POSITIONS.items():
+        argv += ["--icon-position", f"{name}:{x}:{y}"]
 
-
-# -- .DS_Store creation --------------------------------------------------------
-
-def write_ds_store(dest: Path, bg_image_relative: str) -> None:
-    """
-    Write a .DS_Store that configures the Finder DMG window:
-      - custom background image
-      - icon positions for .app and Applications
-      - window bounds
-    """
-    try:
-        from ds_store import DSStore
-        from mac_alias import Alias
-    except ImportError:
-        # Without ds_store the DMG still works; background won't auto-show
-        return
-
-    with DSStore.open(str(dest), "w+") as d:
-        # Finder window geometry
-        d["."]["bwsp"] = {
-            "ShowTabView":   False,
-            "ShowToolbar":   False,
-            "ShowSidebar":   False,
-            "WindowBounds":  "{{200, 120}, {740, 500}}",
-        }
-        # Icon view settings with custom background
-        d["."]["icvp"] = {
-            "backgroundType":       2,
-            "backgroundColorRed":   0.0,
-            "backgroundColorGreen": 0.0,
-            "backgroundColorBlue":  0.0,
-            "backgroundImageAlias": bg_image_relative,
-            "arrangeBy":            "none",
-            "gridOffsetX":          0.0,
-            "gridOffsetY":          0.0,
-            "gridSpacing":          100.0,
-            "iconSize":             128.0,
-            "labelOnBottom":        True,
-            "showIconPreview":      True,
-            "showItemInfo":         False,
-            "textSize":             12.0,
-            "viewOptionsVersion":   1,
-        }
-        # Icon positions
-        d[f"{APP_NAME}.app"]["Iloc"] = (155, 210)
-        d["Applications"]["Iloc"]    = (385, 210)
+    rc = dmgc.main(argv)
+    if rc != 0:
+        raise RuntimeError(f"dmg-constructor.py failed (exit {rc}) building {output}")
+    return output
 
 
 # -- main ----------------------------------------------------------------------
