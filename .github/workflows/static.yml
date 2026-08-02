@@ -31,8 +31,11 @@ jobs:
     steps:
       - name: Install build dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y gimp
+          #sudo apt-get update
+          #sudo apt-get install -y gimp
+          wget https://download.gimp.org/gimp/v3.2/linux/GIMP-3.2.4-x86_64.AppImage
+          chmod +x GIMP-3.2.4-x86_64.AppImage
+          sudo mv GIMP-3.2.4-x86_64.AppImage /usr/local/bin/gimp
 
       - name: Checkout
         uses: actions/checkout@v4
