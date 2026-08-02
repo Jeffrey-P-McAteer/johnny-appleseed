@@ -360,22 +360,26 @@
 
   <!--
     ==========================================================================
-    Asset-source collision guard
+    Asset-source guard
     ==========================================================================
-    Fails the build (this Exec is NOT IgnoreExitCode) when two source files under
-    graphics/ share a base name and at least one is a generated-asset source
-    (.xcf / .aseprite / .svg) - e.g. graphics/a.svg + graphics/a.xcf - so they can
-    never silently overwrite each other's generated output. See
-    scripts/check-asset-collisions.py for the exact rule.
+    Fails the build (this Exec is NOT IgnoreExitCode) on graphics/ sources that
+    would break silently, either:
+      * a name collision - two sources sharing a base name where at least one is a
+        generated-asset source (.xcf / .aseprite / .svg), e.g. a.svg + a.xcf, which
+        would overwrite each other's generated output; or
+      * a progressive JPEG - which raylib/stb_image cannot decode at runtime, so
+        the art fails to load even though it opens fine in editors.
+    See scripts/check-asset-sources.py for the exact rules and the fix hints it
+    prints.
   -->
   <Target Name="ValidateAssetSources" BeforeTargets="AssignTargetPaths;CoreCompile"
           Condition="Exists('$(MSBuildThisFileDirectory)..\..\graphics')">
     <PropertyGroup>
-      <_CollisionScript>$(MSBuildThisFileDirectory)..\..\scripts\check-asset-collisions.py</_CollisionScript>
+      <_AssetCheckScript>$(MSBuildThisFileDirectory)..\..\scripts\check-asset-sources.py</_AssetCheckScript>
       <_GfxDir>$(MSBuildThisFileDirectory)..\..\graphics</_GfxDir>
     </PropertyGroup>
-    <Exec Command="uv run &quot;$(_CollisionScript)&quot; &quot;$(_GfxDir)&quot;"
-          Condition="Exists('$(_CollisionScript)')"
+    <Exec Command="uv run &quot;$(_AssetCheckScript)&quot; &quot;$(_GfxDir)&quot;"
+          Condition="Exists('$(_AssetCheckScript)')"
           StandardOutputImportance="low" />
   </Target>
 

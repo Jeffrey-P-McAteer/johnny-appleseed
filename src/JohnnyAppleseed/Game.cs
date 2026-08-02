@@ -100,20 +100,44 @@ static class Game
     }
 
     // Set the window/taskbar icon from the embedded, build-generated PNG
-    // (graphics/icon.svg -> obj/icon.png). Honoured on Windows and X11. Cocoa
-    // (macOS) and native Wayland ignore per-window icons - the icon there comes
-    // from the .app bundle (.icns) or a .desktop file - so skip Wayland to avoid
-    // a spurious GLFW warning, and treat the whole thing as best-effort.
+    // (graphics/icon.xcf -> graphics/icon.png). Honoured on Windows and X11.
+    // Cocoa (macOS) and native Wayland ignore per-window icons - the icon there
+    // comes from the .app bundle (.icns) or a .desktop file - so skip them to
+    // avoid a spurious GLFW warning, and treat the whole thing as best-effort.
+    //
+    // We hand GLFW SEVERAL concrete sizes via SetWindowIcons rather than the one
+    // native 1024x1024 render. On Windows, GLFW maps these to ICON_SMALL (title
+    // bar / Alt-Tab, ~16px) and ICON_BIG (taskbar button, ~32-48px); if it is
+    // given only the oversized image, Windows must rescale a 1024px icon down for
+    // the taskbar and renders it blank - the title-bar icon still appears, so the
+    // symptom is "window has an icon but the taskbar doesn't". Supplying real
+    // small sizes fixes the taskbar. GLFW copies the pixel data, so we free ours.
+    private static readonly int[] IconSizes = { 16, 24, 32, 48, 64, 128, 256 };
+
     private static void TrySetWindowIcon()
     {
+        if (OperatingSystem.IsMacOS())
+            return;
         if (OperatingSystem.IsLinux() && LinuxDisplay.Detected == LinuxDisplay.Backend.WaylandNative)
             return;
         if (!Assets.Exists("graphics/icon.png"))
             return;
 
-        Image icon = Assets.LoadImage("graphics/icon.png");
-        Raylib.ImageFormat(ref icon, PixelFormat.UncompressedR8G8B8A8); // GLFW wants RGBA8
-        Raylib.SetWindowIcon(icon);
-        Raylib.UnloadImage(icon);
+        Image src = Assets.LoadImage("graphics/icon.png");
+        Raylib.ImageFormat(ref src, PixelFormat.UncompressedR8G8B8A8); // GLFW wants RGBA8
+
+        var icons = new Image[IconSizes.Length];
+        for (int i = 0; i < IconSizes.Length; i++)
+        {
+            Image scaled = Raylib.ImageCopy(src);
+            Raylib.ImageResize(ref scaled, IconSizes[i], IconSizes[i]);
+            icons[i] = scaled;
+        }
+
+        Raylib.SetWindowIcons(icons);
+
+        foreach (Image ic in icons)
+            Raylib.UnloadImage(ic);
+        Raylib.UnloadImage(src);
     }
 }

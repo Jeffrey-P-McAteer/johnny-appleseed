@@ -19,7 +19,7 @@
       : [];
 
     return paths
-      .filter((p) => typeof p === "string" && p.startsWith("/historic-progress"))
+      .filter((p) => typeof p === "string" && (p.startsWith("/historic-progress") || p.startsWith("historic-progress")) )
       .map((p) => p.replace(/^\//, ""));
   }
 
