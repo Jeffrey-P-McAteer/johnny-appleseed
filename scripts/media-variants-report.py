@@ -22,6 +22,7 @@ know what still needs drawing. Combined-tag files are listed as bonus editions.
 Required editions (single-axis):
     weather:  normal (the untagged base), sunny, rainy      (snowy is optional)
     season:   spring, summer, fall, winter
+    daylight: morning, day, afternoon, evening, night        (all optional / bonus)
 
 The tag vocabulary below MUST stay in sync with ConditionVocab in
 src/JohnnyAppleseed/Ambient/Conditions.cs.
@@ -43,9 +44,13 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # KEEP IN SYNC WITH src/JohnnyAppleseed/Ambient/Conditions.cs (ConditionVocab).
-WEATHER_TAGS = ["sunny", "rainy", "snowy"]
-SEASON_TAGS  = ["spring", "summer", "fall", "winter"]
-KNOWN_TAGS   = set(WEATHER_TAGS) | set(SEASON_TAGS)
+WEATHER_TAGS  = ["sunny", "rainy", "snowy"]
+SEASON_TAGS   = ["spring", "summer", "fall", "winter"]
+# Time-of-day editions are chosen by expected outdoor lumens (see SolarLight); when
+# an exact one is missing the runtime uses the nearest and nudges brightness +/-15%,
+# so these are all optional / bonus (never "required").
+DAYLIGHT_TAGS = ["morning", "day", "afternoon", "evening", "night"]
+KNOWN_TAGS    = set(WEATHER_TAGS) | set(SEASON_TAGS) | set(DAYLIGHT_TAGS)
 
 # "normal" weather is the untagged base; snowy is optional by default.
 REQUIRED_WEATHER = ["normal", "sunny", "rainy"]

@@ -50,6 +50,13 @@ static class Game
         Raylib.SetWindowMinSize(640, 360);
         Raylib.SetTargetFPS(60);
 
+        // Raylib defaults ESC to the window-close key, so WindowShouldClose() would
+        // return true the instant a player pressed it - quitting the whole game even
+        // though every scene advertises Esc as "back to the main menu" and handles
+        // InputAction.Cancel itself. Disable the built-in exit key so Esc means only
+        // what the scenes say it means; quitting goes through the menu's LEAVE button.
+        Raylib.SetExitKey(KeyboardKey.Null);
+
         TrySetWindowIcon();
 
         // Audio device for sound effects / music (embedded assets loaded on demand).
@@ -72,6 +79,10 @@ static class Game
             // Advance any streamed background music (loop/cross-fade). No-op until
             // a scene calls MusicManager.Play.
             MusicManager.Update(dt);
+
+            // Let the ambient system notice time-of-day (lumen phase) transitions and
+            // bump its revision so scenes re-pick day/evening/night art as time passes.
+            Ambient.ConditionsProvider.Tick();
 
             IScene? next = scene.Update(dt);
 

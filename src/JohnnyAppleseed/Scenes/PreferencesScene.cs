@@ -1,4 +1,5 @@
 using Raylib_cs;
+using System.Globalization;
 using System.Numerics;
 using JohnnyAppleseed.Ambient;
 using JohnnyAppleseed.Input;
@@ -82,22 +83,36 @@ sealed class PreferencesScene : IScene
             new LabelControl("Host",    () => BuildInfo.BuildHost),
         };
 
-        // -- Weather (demonstrates a second tab) --
+        // -- Weather / environment --
+        // Season, weather and time-of-day each default to "Auto" (derived from the
+        // local date + geolocated weather + computed sun position) and can be pinned
+        // independently.
         var weather = new List<PrefControl>
         {
             new ToggleControl("Live weather",
                 get: () => ConditionsProvider.Enabled,
                 set: v => ConditionsProvider.Enabled = v),
 
-            new SelectorControl("Manual override", OverrideOptions,
-                get: () => OverrideToIndex(ConditionsProvider.WeatherOverride),
-                set: i => ConditionsProvider.WeatherOverride = IndexToOverride(i)),
+            new SelectorControl("Weather", WeatherOptions,
+                get: () => WeatherToIndex(ConditionsProvider.WeatherOverride),
+                set: i => ConditionsProvider.WeatherOverride = IndexToWeather(i)),
+
+            new SelectorControl("Season", SeasonOptions,
+                get: () => SeasonToIndex(ConditionsProvider.SeasonOverride),
+                set: i => ConditionsProvider.SeasonOverride = IndexToSeason(i)),
+
+            new SelectorControl("Daytime", DaylightOptions,
+                get: () => DaylightToIndex(ConditionsProvider.DaylightOverride),
+                set: i => ConditionsProvider.DaylightOverride = IndexToDaylight(i)),
 
             new LabelControl("Detected now", () =>
             {
                 Conditions c = ConditionsProvider.Current;
-                return $"{c.Weather}, {c.Season}";
+                return $"{c.Weather}, {c.Season}, {c.Daylight}";
             }),
+
+            new LabelControl("Expected lumens", () =>
+                $"{ConditionsProvider.Lumens.ToString("N0", CultureInfo.InvariantCulture)} lx"),
         };
 
         _tabs.Clear();
@@ -105,15 +120,37 @@ sealed class PreferencesScene : IScene
         _tabs.Add(new Tab("Weather", weather));
     }
 
-    // Manual-override selector: index 0 = automatic, then one per Weather value.
-    private static readonly string[] OverrideOptions = { "Auto", "Normal", "Sunny", "Rainy", "Snowy" };
-    private static int OverrideToIndex(Weather? w) => w switch
+    // Override selectors: index 0 = automatic ("Auto"), then one per enum value.
+    private static readonly string[] WeatherOptions  = { "Auto", "Normal", "Sunny", "Rainy", "Snowy" };
+    private static int WeatherToIndex(Weather? w) => w switch
     {
         null => 0, Weather.Normal => 1, Weather.Sunny => 2, Weather.Rainy => 3, Weather.Snowy => 4, _ => 0,
     };
-    private static Weather? IndexToOverride(int i) => i switch
+    private static Weather? IndexToWeather(int i) => i switch
     {
         1 => Weather.Normal, 2 => Weather.Sunny, 3 => Weather.Rainy, 4 => Weather.Snowy, _ => (Weather?)null,
+    };
+
+    private static readonly string[] SeasonOptions = { "Auto", "Spring", "Summer", "Fall", "Winter" };
+    private static int SeasonToIndex(Season? s) => s switch
+    {
+        null => 0, Season.Spring => 1, Season.Summer => 2, Season.Fall => 3, Season.Winter => 4, _ => 0,
+    };
+    private static Season? IndexToSeason(int i) => i switch
+    {
+        1 => Season.Spring, 2 => Season.Summer, 3 => Season.Fall, 4 => Season.Winter, _ => (Season?)null,
+    };
+
+    private static readonly string[] DaylightOptions = { "Auto", "Morning", "Day", "Afternoon", "Evening", "Night" };
+    private static int DaylightToIndex(Daylight? d) => d switch
+    {
+        null => 0, Daylight.Morning => 1, Daylight.Day => 2, Daylight.Afternoon => 3,
+        Daylight.Evening => 4, Daylight.Night => 5, _ => 0,
+    };
+    private static Daylight? IndexToDaylight(int i) => i switch
+    {
+        1 => Daylight.Morning, 2 => Daylight.Day, 3 => Daylight.Afternoon,
+        4 => Daylight.Evening, 5 => Daylight.Night, _ => (Daylight?)null,
     };
 
     public IScene? Update(float dt)

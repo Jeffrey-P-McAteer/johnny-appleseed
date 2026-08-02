@@ -7,11 +7,27 @@ enum Weather { Normal, Sunny, Rainy, Snowy }
 enum Season { Spring, Summer, Fall, Winter }
 
 /// <summary>
-/// The ambient conditions the game selects artwork against: the current
-/// <see cref="Weather"/> and <see cref="Season"/>. Immutable snapshot produced by
-/// <see cref="ConditionsProvider"/> and consumed by <see cref="ArtVariant"/>.
+/// Named phase of the outdoor-light day, derived from the expected outdoor
+/// illuminance (see <see cref="SolarLight"/>) plus whether the sun is before or
+/// after solar noon. Drives day/night lights and artwork. Listed brightest-to-
+/// darkest is not the intent; use <see cref="ConditionVocab.RepresentativeLumens"/>
+/// for a light-level ordering.
 /// </summary>
-readonly record struct Conditions(Weather Weather, Season Season);
+enum Daylight { Morning, Day, Afternoon, Evening, Night }
+
+/// <summary>
+/// The ambient conditions the game selects artwork against: the current
+/// <see cref="Weather"/>, <see cref="Season"/> and <see cref="Daylight"/> phase,
+/// plus the raw expected outdoor <see cref="Lumens"/> (illuminance in lux) used to
+/// nudge brightness when no exact time-of-day edition exists. Immutable snapshot
+/// produced by <see cref="ConditionsProvider"/> and consumed by <see cref="ArtVariant"/>.
+///
+/// <see cref="Daylight"/> / <see cref="Lumens"/> default to a plain daytime value so
+/// callers that only care about weather+season can still write
+/// <c>new Conditions(w, s)</c>.
+/// </summary>
+readonly record struct Conditions(
+    Weather Weather, Season Season, Daylight Daylight = Daylight.Day, double Lumens = 0);
 
 /// <summary>
 /// The controlled vocabulary of art-variant filename tags, shared by the runtime
@@ -43,18 +59,52 @@ static class ConditionVocab
             ["winter"] = Season.Winter,
         };
 
+    // daylight tag <-> enum. Every phase has a tag (there is no "untagged" default
+    // time of day - an untagged file is time-agnostic and matches any phase).
+    private static readonly Dictionary<string, Daylight> DaylightByTag =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["morning"]   = Daylight.Morning,
+            ["day"]       = Daylight.Day,
+            ["afternoon"] = Daylight.Afternoon,
+            ["evening"]   = Daylight.Evening,
+            ["night"]     = Daylight.Night,
+        };
+
     /// <summary>All recognized weather tags (for the reporter / docs).</summary>
     public static IEnumerable<string> WeatherTags => WeatherByTag.Keys;
 
     /// <summary>All recognized season tags (for the reporter / docs).</summary>
     public static IEnumerable<string> SeasonTags => SeasonByTag.Keys;
 
+    /// <summary>All recognized time-of-day tags (for the reporter / docs).</summary>
+    public static IEnumerable<string> DaylightTags => DaylightByTag.Keys;
+
     public static bool TryWeather(string tag, out Weather w) => WeatherByTag.TryGetValue(tag, out w);
     public static bool TrySeason(string tag, out Season s)   => SeasonByTag.TryGetValue(tag, out s);
+    public static bool TryDaylight(string tag, out Daylight d) => DaylightByTag.TryGetValue(tag, out d);
 
-    /// <summary>True if <paramref name="tag"/> is any recognized weather/season tag.</summary>
+    /// <summary>True if <paramref name="tag"/> is any recognized weather/season/daylight tag.</summary>
     public static bool IsKnown(string tag) =>
-        WeatherByTag.ContainsKey(tag) || SeasonByTag.ContainsKey(tag);
+        WeatherByTag.ContainsKey(tag) || SeasonByTag.ContainsKey(tag) || DaylightByTag.ContainsKey(tag);
+
+    /// <summary>
+    /// A representative clear-sky outdoor illuminance (lux) for each time-of-day
+    /// phase. Used only when no artwork exists for the current phase: the selector
+    /// picks the edition whose representative level is nearest the real expected
+    /// lumens and nudges its brightness toward the real value (see <see cref="ArtVariant"/>).
+    /// Morning and afternoon share a level (comparably bright, differ only by
+    /// before/after noon).
+    /// </summary>
+    public static double RepresentativeLumens(Daylight d) => d switch
+    {
+        Daylight.Night     => 5,
+        Daylight.Evening   => 800,
+        Daylight.Morning   => 20000,
+        Daylight.Afternoon => 20000,
+        Daylight.Day       => 60000,
+        _                  => 20000,
+    };
 }
 
 /// <summary>
@@ -121,6 +171,28 @@ static class ConditionMap
         95 or 96 or 99                  => Weather.Rainy,   // thunderstorm
         _                               => Weather.Normal,  // 2,3 cloud; 45,48 fog; etc.
     };
+
+    // Illuminance thresholds (lux) that separate the time-of-day phases. Chosen to
+    // line up with SolarLight.IlluminanceLux: ~50 lux is deep twilight (sun a few
+    // degrees down), ~2000 lux is a low sun / heavy dusk, ~40000 lux is a high sun.
+    private const double NightMaxLux = 50;
+    private const double DuskMaxLux  = 2000;
+    private const double DayMinLux   = 40000;
+
+    /// <summary>
+    /// Classify the expected outdoor <paramref name="lumens"/> (illuminance in lux)
+    /// into a <see cref="Daylight"/> phase. <paramref name="afternoon"/> (true past
+    /// solar noon) splits the otherwise-ambiguous mid-brightness band into
+    /// morning vs. afternoon/evening. Very dark -> <see cref="Daylight.Night"/>;
+    /// very bright -> <see cref="Daylight.Day"/>.
+    /// </summary>
+    public static Daylight DaylightFromLumens(double lumens, bool afternoon)
+    {
+        if (lumens < NightMaxLux) return Daylight.Night;
+        if (lumens >= DayMinLux)  return Daylight.Day;
+        if (!afternoon)           return Daylight.Morning;
+        return lumens < DuskMaxLux ? Daylight.Evening : Daylight.Afternoon;
+    }
 
     private static bool Contains(string haystack, params string[] needles)
     {

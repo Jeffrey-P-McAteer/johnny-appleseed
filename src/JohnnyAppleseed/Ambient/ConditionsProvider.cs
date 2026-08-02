@@ -37,15 +37,21 @@ static class ConditionsProvider
     private static readonly HttpClient Http = CreateHttpClient();
 
     // Guarded by _lock.
-    private static Weather  _weather     = Weather.Normal;
-    private static double   _lat         = 0;
-    private static double   _lon         = 0;
-    private static bool     _southern    = false;
-    private static DateTime _fetchedUtc  = DateTime.MinValue;
-    private static bool     _enabled     = true;
-    private static Weather? _override    = null;   // manual override; null = automatic
-    private static int      _revision    = 0;
-    private static bool     _seeded      = false;
+    private static Weather   _weather          = Weather.Normal;
+    private static double    _lat              = 0;
+    private static double    _lon              = 0;
+    private static bool      _southern         = false;
+    private static DateTime  _fetchedUtc       = DateTime.MinValue;
+    private static bool      _enabled          = true;
+    private static Weather?  _override         = null;   // manual weather override; null = automatic
+    private static Season?   _seasonOverride   = null;   // manual season override; null = automatic
+    private static Daylight? _daylightOverride = null;   // manual time-of-day override; null = automatic
+    private static int       _revision         = 0;
+    private static bool      _seeded           = false;
+
+    // Last effective (weather, season, daylight) tuple seen by Tick, so a natural
+    // time-of-day transition can bump the revision without spamming it every frame.
+    private static (Weather, Season, Daylight)? _lastEffective = null;
 
     private static int _refreshing = 0;   // Interlocked 0/1 guard against overlapping fetches
 
@@ -58,8 +64,38 @@ static class ConditionsProvider
             lock (_lock)
             {
                 Weather w = _override ?? (_enabled ? _weather : Weather.Normal);
-                return new Conditions(w, ConditionMap.SeasonFromDate(DateTime.Now, _southern));
+                Season  s = _seasonOverride ?? ConditionMap.SeasonFromDate(DateTime.Now, _southern);
+
+                // Expected outdoor lumens for the last known location, right now.
+                // Offline / pre-geolocation this uses lat/lon 0,0 and self-corrects
+                // once a reading lands. Season override does not affect the sun.
+                (double elevation, bool afternoon) = SolarLight.SunPosition(_lat, _lon, DateTime.UtcNow);
+                double lumens = SolarLight.IlluminanceLux(elevation);
+                Daylight d = _daylightOverride ?? ConditionMap.DaylightFromLumens(lumens, afternoon);
+
+                return new Conditions(w, s, d, lumens);
             }
+        }
+    }
+
+    /// <summary>Expected outdoor lumens (illuminance, lux) at the last known location, right now.</summary>
+    public static double Lumens => Current.Lumens;
+
+    /// <summary>
+    /// Poll once per frame: if the effective (weather, season, daylight) has changed
+    /// since last time - typically a natural time-of-day transition - bump the
+    /// revision so scenes re-pick their editions. Non-blocking; cheap trig only.
+    /// </summary>
+    public static void Tick()
+    {
+        Conditions now = Current;   // seeds + computes the effective tuple
+        var eff = (now.Weather, now.Season, now.Daylight);
+        lock (_lock)
+        {
+            if (_lastEffective is { } prev && prev.Equals(eff)) return;
+            bool first = _lastEffective is null;
+            _lastEffective = eff;
+            if (!first) _revision++;   // don't bump on the very first observation
         }
     }
 
@@ -105,6 +141,46 @@ static class ConditionsProvider
             {
                 if (_override == value) return;
                 _override = value;
+                _revision++;
+            }
+            SaveCache();
+        }
+    }
+
+    /// <summary>
+    /// Manual season override, or null for automatic (computed from the local date
+    /// and hemisphere). Persisted.
+    /// </summary>
+    public static Season? SeasonOverride
+    {
+        get { EnsureSeeded(); lock (_lock) return _seasonOverride; }
+        set
+        {
+            EnsureSeeded();
+            lock (_lock)
+            {
+                if (_seasonOverride == value) return;
+                _seasonOverride = value;
+                _revision++;
+            }
+            SaveCache();
+        }
+    }
+
+    /// <summary>
+    /// Manual time-of-day (daylight) override, or null for automatic (derived from
+    /// the expected lumens at the last known location). Persisted.
+    /// </summary>
+    public static Daylight? DaylightOverride
+    {
+        get { EnsureSeeded(); lock (_lock) return _daylightOverride; }
+        set
+        {
+            EnsureSeeded();
+            lock (_lock)
+            {
+                if (_daylightOverride == value) return;
+                _daylightOverride = value;
                 _revision++;
             }
             SaveCache();
@@ -158,10 +234,16 @@ static class ConditionsProvider
             if (root.TryGetProperty("weather", out JsonElement wv) &&
                 Enum.TryParse(wv.GetString(), ignoreCase: true, out Weather w))
                 _weather = w;
-            // "auto" (or absent/invalid) leaves _override null.
+            // "auto" (or absent/invalid) leaves the overrides null.
             if (root.TryGetProperty("override", out JsonElement ov) &&
                 Enum.TryParse(ov.GetString(), ignoreCase: true, out Weather ow))
                 _override = ow;
+            if (root.TryGetProperty("seasonOverride", out JsonElement so) &&
+                Enum.TryParse(so.GetString(), ignoreCase: true, out Season sov))
+                _seasonOverride = sov;
+            if (root.TryGetProperty("daylightOverride", out JsonElement do_) &&
+                Enum.TryParse(do_.GetString(), ignoreCase: true, out Daylight dov))
+                _daylightOverride = dov;
             if (root.TryGetProperty("latitude", out JsonElement lv) && lv.TryGetDouble(out double lat))
             {
                 _lat = lat;
@@ -183,11 +265,13 @@ static class ConditionsProvider
     // Persist the whole current state (weather + settings) from the fields.
     private static void SaveCache()
     {
-        Weather weather; double lat, lon; DateTime fetched; bool enabled; Weather? ovr;
+        Weather weather; double lat, lon; DateTime fetched; bool enabled;
+        Weather? ovr; Season? sovr; Daylight? dovr;
         lock (_lock)
         {
             weather = _weather; lat = _lat; lon = _lon;
-            fetched = _fetchedUtc; enabled = _enabled; ovr = _override;
+            fetched = _fetchedUtc; enabled = _enabled;
+            ovr = _override; sovr = _seasonOverride; dovr = _daylightOverride;
         }
         try
         {
@@ -197,6 +281,8 @@ static class ConditionsProvider
             w.WriteStartObject();
             w.WriteString("weather", weather.ToString());
             w.WriteString("override", ovr?.ToString() ?? "auto");
+            w.WriteString("seasonOverride", sovr?.ToString() ?? "auto");
+            w.WriteString("daylightOverride", dovr?.ToString() ?? "auto");
             w.WriteNumber("latitude", lat);
             w.WriteNumber("longitude", lon);
             w.WriteString("fetchedUtc", fetched == DateTime.MinValue

@@ -35,6 +35,7 @@ sealed class MainMenuScene : IScene
 
     private MenuLayoutDef _layout = MenuLayoutDatabase.Default();
     private AnimatedTexture? _backdrop;
+    private float _backdropBrightness = 1f;   // 1.0 = as authored; nudged when no exact time-of-day edition
     private int _conditionsRevision = -1;
 
     private int      _selectedIndex;
@@ -132,14 +133,16 @@ sealed class MainMenuScene : IScene
         Conditions conditions = ConditionsProvider.Current;
 
         string setKey = _layout.Backdrop;
-        string? key = ArtVariant.Resolve(setKey, conditions, Assets.Keys(setKey));
-        if (key is null)
+        ArtVariant.Selection? pick = ArtVariant.Resolve(setKey, conditions, Assets.Keys(setKey));
+        if (pick is null)
         {
             _backdrop = null;
+            _backdropBrightness = 1f;
             return;
         }
 
-        _backdrop = Assets.Animated(key);
+        _backdropBrightness = pick.Value.Brightness;
+        _backdrop = Assets.Animated(pick.Value.Key);
         Raylib.SetTextureFilter(_backdrop.Current, TextureFilter.Bilinear);  // smooth when scaled
     }
 
@@ -155,11 +158,22 @@ sealed class MainMenuScene : IScene
             float scale = MathF.Max((float)sw / tex.Width, (float)sh / tex.Height);
             float dw = tex.Width * scale;
             float dh = tex.Height * scale;
-            Raylib.DrawTexturePro(
-                tex,
-                new Rectangle(0, 0, tex.Width, tex.Height),
-                new Rectangle((sw - dw) / 2f, (sh - dh) / 2f, dw, dh),
-                Vector2.Zero, 0f, Color.White);
+            var src  = new Rectangle(0, 0, tex.Width, tex.Height);
+            var dest = new Rectangle((sw - dw) / 2f, (sh - dh) / 2f, dw, dh);
+
+            // Brightness nudge (the ArtVariant "nearest edition +/-15%" rule): darken
+            // via a multiply tint (<=1); brighten via a faint additive second pass (>1).
+            float b = _backdropBrightness;
+            byte mul = (byte)(255 * Math.Clamp(b, 0f, 1f));
+            Raylib.DrawTexturePro(tex, src, dest, Vector2.Zero, 0f, new Color(mul, mul, mul, (byte)255));
+
+            if (b > 1f)
+            {
+                byte add = (byte)(255 * Math.Clamp(b - 1f, 0f, 1f));
+                Raylib.BeginBlendMode(BlendMode.Additive);
+                Raylib.DrawTexturePro(tex, src, dest, Vector2.Zero, 0f, new Color(add, add, add, (byte)255));
+                Raylib.EndBlendMode();
+            }
         }
 
         Raylib.DrawRectangle(0, 0, sw, sh, new Color(3, 3, 12, 110));
