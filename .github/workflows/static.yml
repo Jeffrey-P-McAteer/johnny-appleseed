@@ -49,6 +49,8 @@ jobs:
           cp -r graphics/* www/graphics/ || true
           cp -r historic-progress/* www/historic-progress/ || true
 
+          ls -alh scripts/gimp-automata/export-png.py || true
+
           # .xcf to .png because that's easier to reference as a one-off generation.
           GIMP_INPUT=graphics/icon.xcf GIMP_OUTPUT=www/graphics/icon.png gimp --no-interface --batch-interpreter=python-fu-eval -b "exec(open('scripts/gimp-automata/export-png.py').read())" --quit
 
