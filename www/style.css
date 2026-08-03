@@ -2,24 +2,39 @@
 
 :root {
     --bg: #f3f6fb;
-    --fg: #1e293b;
     --accent: #0f6cbd;
 
     --panel: #ffffff;
     --border: #d9e2ec;
 
+    /* The tiled artwork behind <main> is dark in BOTH themes, so the body text
+       stays light on dark regardless of color scheme - a light tan glyph with a
+       dark tan halo. Defined once here and shared by the dark theme below. */
+    --fg: #e9d8b4;          /* light tan - text */
+    --text-outline: #3b2c17; /* dark tan  - 1px outline / halo */
+
     --shadow: 0 12px 40px rgba(0,0,0,.12);
     --radius: 18px;
+
+    /* Floating <main> over the fixed artwork backdrop. These are measured from
+       the top of the PAGE (not the banner), so the gap is constant at every
+       viewport width - the old negative-margin trick was tied to the banner's
+       rendered height and rode up over the top on narrow screens. */
+    --main-top: 320px;         /* fixed gap: page top -> <main> */
+    --main-bottom: 4rem;       /* floating gap below <main> so it never touches the edge */
+    --main-top-phone: 150px;   /* smaller fixed gap on phones */
 }
 
 @media (prefers-color-scheme: dark) {
     :root {
         --bg: #0f172a;
-        --fg: #f1f5f9;
         --accent: #6cb6ff;
 
         --panel: #1b2538;
         --border: #334155;
+
+        /* --fg and --text-outline are intentionally NOT overridden here: the
+           tan-on-dark text from :root already suits this theme's dark panel. */
 
         --shadow: 0 12px 40px rgba(0,0,0,.45);
     }
@@ -52,17 +67,24 @@ body {
 
 /* ---------- Banner ---------- */
 
+/* The banner is a fixed, full-viewport artwork backdrop that everything floats
+   over. Pinning it to the viewport (rather than leaving it in flow with an
+   auto height) decouples <main>'s top offset from the banner's rendered height,
+   which is what let <main> ride above the top on narrow viewports. It also means
+   the artwork shows through the gap above AND around the floating <main>. */
 img#banner {
-    display: block;
+    position: fixed;
+    inset: 0;               /* top/right/bottom/left: 0 -> cover the viewport */
 
     width: 100%;
-    max-width: 99.99vw;
-    height: auto;
+    height: 100%;
 
     object-fit: cover;
-    object-position: top;
+    object-position: top center;
 
     margin: 0;
+
+    z-index: -1;            /* behind the page content, above the body background */
 }
 
 /* ---------- Main content ---------- */
@@ -72,7 +94,9 @@ main {
 
     max-width: 900px;
 
-    margin: -1250px auto 4rem auto;
+    /* Fixed gap from the page top; a floating gap at the bottom. Both are in the
+       layout variables so the mobile override below only has to change numbers. */
+    margin: var(--main-top) auto var(--main-bottom) auto;
     padding: 1rem 3rem;
 
     background: var(--panel);
@@ -190,6 +214,35 @@ pre code {
     color: inherit;
 }
 
+/* ---------- Readable text on the tiled background ---------- */
+
+/* Text that sits directly on <main>'s tiled background image (i.e. NOT inside a
+   .card, which paints its own solid panel) gets a thin 1px contrasting outline
+   so the glyphs stay legible over any patch of the image. The light-tan text
+   (--fg) is ringed by a dark-tan halo (--text-outline); that dark edge keeps it
+   readable over the lighter patches of the artwork, in both light and dark
+   themes (the artwork is dark either way).
+
+   :where() keeps specificity at zero so the .card override below wins cleanly.
+   Inline <code> is excluded on purpose: text-shadow is inherited, but the code
+   rule sets its own text-shadow, which overrides the inherited halo. */
+main :where(h1, h2, h3, h4, h5, h6, p, li, blockquote, dt, dd, figcaption, a) {
+    text-shadow:
+        -1px -1px 0 var(--text-outline),
+         1px -1px 0 var(--text-outline),
+        -1px  1px 0 var(--text-outline),
+         1px  1px 0 var(--text-outline);
+}
+
+/* Cards have their own readable background - leave their text un-outlined.
+   The card itself is reset too (not just its descendants): a card can hold raw
+   text directly, and here each .card is wrapped in an outlined <a>, so without
+   this the halo would inherit into the card's text. */
+main .card,
+main .card :where(h1, h2, h3, h4, h5, h6, p, li, blockquote, dt, dd, figcaption, a) {
+    text-shadow: none;
+}
+
 /* ---------- Optional content cards ---------- */
 
 .card {
@@ -206,21 +259,17 @@ pre code {
 
 @media (max-width: 700px) {
 
-    img#banner {
-        height: 220px;
-    }
-
+    /* Phone: <main> fills to the edges from a smaller fixed top offset down to
+       the bottom of the page - no border-radius, no side or bottom gaps. The
+       banner keeps its fixed full-viewport backdrop (no height override), so the
+       artwork still shows in the strip above <main>. */
     main {
-        margin: -32px 0 0 0;
+        margin: var(--main-top-phone) 0 0 0;
         padding: 1.5rem;
 
         max-width: none;
 
-        border-radius:
-            var(--radius)
-            var(--radius)
-            0
-            0;
+        border-radius: 0;
     }
 
     h1 {
