@@ -4,14 +4,14 @@
     --bg: #f3f6fb;
     --accent: #0f6cbd;
 
-    --panel: #ffffff;
+    --panel: #cedfce;
     --border: #d9e2ec;
 
     /* The tiled artwork behind <main> is dark in BOTH themes, so the body text
        stays light on dark regardless of color scheme - a light tan glyph with a
        dark tan halo. Defined once here and shared by the dark theme below. */
-    --fg: #e9d8b4;          /* light tan - text */
-    --text-outline: #3b2c17; /* dark tan  - 1px outline / halo */
+    --fg: #3b2c17;          /* dark tan - text */
+    --text-outline: #b4a07b; /* light tan  - 1px outline / halo */
 
     --shadow: 0 12px 40px rgba(0,0,0,.12);
     --radius: 18px;
@@ -33,10 +33,17 @@
         --panel: #1b2538;
         --border: #334155;
 
-        /* --fg and --text-outline are intentionally NOT overridden here: the
-           tan-on-dark text from :root already suits this theme's dark panel. */
+        --fg: #b4a07b;          /* light tan - text */
+        --text-outline: #3b2c17; /* dark tan  - 1px outline / halo */
 
         --shadow: 0 12px 40px rgba(0,0,0,.45);
+    }
+}
+
+@media (prefers-color-scheme: light) {
+    h1, h2 {
+        /* We keep the same colors as in dark mode ONLY for h1/h2 elements */
+        color: #b4a07b;          /* dark tan - text */
     }
 }
 
