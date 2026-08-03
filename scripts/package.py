@@ -44,6 +44,10 @@ import importlib.util
 # SVG -> .icns rasteriser (shared with the MSBuild icon pipeline)
 from _icons import write_icns
 
+# Single source of truth for the build version (shared with publish.py + the
+# GenerateBuildInfo MSBuild target via the JOHNNY_APPLESEED_VERSION env var).
+from _version import resolve_version
+
 # -- configuration -------------------------------------------------------------
 
 REPO_ROOT   = Path(__file__).resolve().parent.parent
@@ -57,7 +61,11 @@ ICON_SOURCE = REPO_ROOT / "graphics" / "icon.xcf"
 
 APP_NAME      = "JohnnyAppleseed"
 APP_ID        = "com.johnnyseed.game"
-APP_VERSION   = "1.0.0"
+# Resolving here also exports JOHNNY_APPLESEED_VERSION (when not already set),
+# so the `dotnet publish` we spawn bakes the identical version into the binary.
+# The value lands in the macOS .app Info.plist (CFBundle[Short]Version) below;
+# it previously read a stale hard-coded "1.0.0".
+APP_VERSION   = resolve_version()
 
 # -- DMG (macOS) layout configuration -----------------------------------------
 # All .dmg building is delegated to build/dmg-constructor.py, a validated,

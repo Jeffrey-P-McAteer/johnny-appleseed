@@ -55,6 +55,8 @@ from pathlib import Path
 
 import requests
 
+from _version import resolve_version
+
 REPO_ROOT  = Path(__file__).resolve().parent.parent
 DIST_DIR   = REPO_ROOT / "dist"
 CREDS_FILE = Path.home() / ".johnny-appleseed-publish-creds.json"
@@ -114,19 +116,6 @@ def load_creds() -> dict:
         sys.exit(1)
 
     return gh
-
-
-# -- version -------------------------------------------------------------------
-
-def compute_version() -> str:
-    """
-    YYYY.MM.H where H = hours elapsed since the start of the month (UTC).
-    Matches the formula used by the GenerateBuildInfo MSBuild target.
-    Range: 0 (month start) ... 743 (31-day month, last hour).
-    """
-    now = datetime.now(timezone.utc)
-    hours_in_month = (now.day - 1) * 24 + now.hour
-    return f"{now.year}.{now.month:02d}.{hours_in_month}"
 
 
 # -- git -----------------------------------------------------------------------
@@ -490,7 +479,11 @@ def main() -> None:
     print(sep)
     print("Version & git state")
     print(sep)
-    version  = compute_version()
+    # Resolve once here (this also exports JOHNNY_APPLESEED_VERSION), so the
+    # package.py subprocess and its `dotnet publish` inherit the SAME version -
+    # the git tag, macOS plist, GitHub asset names, and the baked-in
+    # BuildInfo.Version can no longer drift across an hour boundary.
+    version  = resolve_version()
     tag      = f"v{version}"
     git_info = check_git_state()
 

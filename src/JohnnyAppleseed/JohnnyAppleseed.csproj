@@ -137,11 +137,41 @@
   <Target Name="GenerateBuildInfo" BeforeTargets="CoreCompile">
 
     <!-- == version: YYYY.MM.(hours elapsed in month, UTC) ================= -->
-    <!-- No version file to maintain. Format gives ~744 distinct values per  -->
-    <!-- month (31d x 24h) - enough for multiple releases per day.           -->
-    <!-- Examples: 2026.07.0  (July 1 00:xx UTC)                             -->
-    <!--           2026.07.375 (July 16 15:xx UTC)                           -->
+    <!-- Single source of truth is scripts/_version.py. No version file to    -->
+    <!-- maintain; the format gives ~744 distinct values per month (31d x 24h)-->
+    <!-- - enough for multiple releases per day.                              -->
+    <!-- Examples: 2026.07.0 (July 1 00:xx UTC), 2026.07.375 (Jul 16 15:xx).  -->
+    <!--                                                                       -->
+    <!-- Resolution tiers (first non-empty wins):                             -->
+    <!--   1. $(JOHNNY_APPLESEED_VERSION) - exported by scripts/publish.py /   -->
+    <!--      package.py so the git tag, macOS plist, GitHub asset names, and  -->
+    <!--      this baked-in constant all share ONE value (no hour-boundary     -->
+    <!--      drift). MSBuild surfaces environment variables as properties.    -->
+    <!--   2. `uv run scripts/_version.py` - reuses the SAME Python formula    -->
+    <!--      for a bare `dotnet build`/publish not launched via the scripts.  -->
+    <!--   3. inline arithmetic below - a dependency-free last resort (the one -->
+    <!--      remaining copy of the formula) so a checkout without uv still    -->
+    <!--      stamps a real version instead of an empty string.               -->
     <PropertyGroup>
+      <_BuildVersion>$(JOHNNY_APPLESEED_VERSION)</_BuildVersion>
+    </PropertyGroup>
+
+    <!-- Tier 2: reuse the Python source of truth when the env var is unset. -->
+    <Exec Condition="'$(_BuildVersion)' == '' And Exists('$(MSBuildThisFileDirectory)..\..\scripts\_version.py')"
+          Command="uv run &quot;$(MSBuildThisFileDirectory)..\..\scripts\_version.py&quot;"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true"
+          StandardOutputImportance="low"
+          StandardErrorImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_VersionScriptOut" />
+    </Exec>
+    <PropertyGroup Condition="'$(_BuildVersion)' == '' And '$(_VersionScriptOut)' != ''">
+      <_BuildVersion>$(_VersionScriptOut.Trim())</_BuildVersion>
+    </PropertyGroup>
+
+    <!-- Tier 3: dependency-free fallback (duplicates _version.py's formula;
+         reached only when neither the env var nor uv is available). -->
+    <PropertyGroup Condition="'$(_BuildVersion)' == ''">
       <_VDay>$([System.DateTime]::UtcNow.Day)</_VDay>
       <_VHour>$([System.DateTime]::UtcNow.Hour)</_VHour>
       <_VHoursInMonth>$([MSBuild]::Add($([MSBuild]::Multiply($([MSBuild]::Subtract($(_VDay), 1)), 24)), $(_VHour)))</_VHoursInMonth>
