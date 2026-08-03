@@ -1,5 +1,6 @@
 using Raylib_cs;
 using System.Numerics;
+using JohnnyAppleseed.Ai;
 using JohnnyAppleseed.Ambient;
 using JohnnyAppleseed.Input;
 using JohnnyAppleseed.Rendering;
@@ -37,6 +38,7 @@ sealed class MainMenuScene : IScene
     private AnimatedTexture? _backdrop;
     private float _backdropBrightness = 1f;   // 1.0 = as authored; nudged when no exact time-of-day edition
     private int _conditionsRevision = -1;
+    private int _aiRevision = -1;             // bumps when a generated edition finishes caching
 
     private int      _selectedIndex;
     private bool     _isFullscreen;
@@ -58,8 +60,9 @@ sealed class MainMenuScene : IScene
     {
         _isFullscreen = Raylib.IsWindowFullscreen();
 
-        // A late weather reading (or a refresh) re-picks the backdrop edition.
-        if (ConditionsProvider.Revision != _conditionsRevision)
+        // A late weather reading (or a refresh), or a freshly-cached AI edition landing,
+        // re-picks the backdrop edition.
+        if (ConditionsProvider.Revision != _conditionsRevision || AiAssets.Revision != _aiRevision)
             ResolveBackdrop();
         _backdrop?.Advance(dt);
 
@@ -118,6 +121,22 @@ sealed class MainMenuScene : IScene
             DrawButton(_layout.Buttons[i], rects[i], _glow.Length > i ? _glow[i] : 0f);
 
         DrawHint();
+
+        if (AiAssets.Enabled)
+            DrawAiStatus();
+    }
+
+    // Small bottom-left readout so the AI pipeline is observable during a live test:
+    // how many generated backdrop editions are cached so far. Only shown when enabled.
+    private void DrawAiStatus()
+    {
+        int cached = AiAssets.CachedKeys(_layout.Backdrop).Count;
+        string msg = $"AI: on  -  {cached} generated backdrop edition(s) cached";
+        const int fs = 18;
+        int x = 12;
+        int y = Raylib.GetScreenHeight() - fs - 10;
+        Raylib.DrawText(msg, x + 1, y + 1, fs, new Color(0, 0, 0, 180));
+        Raylib.DrawText(msg, x, y, fs, new Color(120, 230, 140, 255));
     }
 
     public void Unload()
@@ -130,10 +149,22 @@ sealed class MainMenuScene : IScene
     private void ResolveBackdrop()
     {
         _conditionsRevision = ConditionsProvider.Revision;
+        _aiRevision = AiAssets.Revision;
         Conditions conditions = ConditionsProvider.Current;
 
         string setKey = _layout.Backdrop;
-        ArtVariant.Selection? pick = ArtVariant.Resolve(setKey, conditions, Assets.Keys(setKey));
+
+        // AI-aware resolve: consider embedded editions AND any already-generated ones,
+        // and (when a prompt is authored + enabled) request a missing edition in the
+        // background. With AI disabled this reduces exactly to the embedded-only pick.
+        AiVariant.Plan plan = AiVariant.Resolve(
+            setKey, conditions,
+            Assets.Keys(setKey), AiAssets.CachedKeys(setKey), AiAssets.PromptFor(setKey));
+
+        if (plan.Generate is { } request)
+            AiAssets.RequestGeneration(request);
+
+        ArtVariant.Selection? pick = plan.Chosen;
         if (pick is null)
         {
             _backdrop = null;

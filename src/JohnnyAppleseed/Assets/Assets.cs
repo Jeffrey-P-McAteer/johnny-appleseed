@@ -31,8 +31,20 @@ static class Assets
     private static readonly Dictionary<string, (Music music, GCHandle pin)> _music = new();
     private static readonly Dictionary<string, AnimatedTexture> _animated = new();
 
-    /// <summary>True if an embedded resource with this logical key exists.</summary>
-    public static bool Exists(string key) => Asm.GetManifestResourceInfo(key) is not null;
+    /// <summary>
+    /// Optional resolver for logical keys that are NOT embedded but live on disk - the
+    /// AI asset cache installs one (see <see cref="Ai.AiAssets"/>) so a generated
+    /// variant loads through the very same <see cref="Texture"/>/<see cref="Animated"/>
+    /// path as an embedded asset. Returns an absolute file path it can serve, or null.
+    /// A hook (rather than a hard reference) keeps the core loader decoupled and fully
+    /// functional when the AI subsystem is absent or disabled.
+    /// </summary>
+    public static Func<string, string?>? DiskResolver;
+
+    /// <summary>True if this logical key resolves to an embedded resource or a cached file on disk.</summary>
+    public static bool Exists(string key) =>
+        Asm.GetManifestResourceInfo(key) is not null ||
+        (DiskResolver?.Invoke(key) is { } path && File.Exists(path));
 
     /// <summary>
     /// Every embedded key beginning with <paramref name="prefix"/> (ordinal), e.g.
@@ -42,14 +54,25 @@ static class Assets
     public static IEnumerable<string> Keys(string prefix) =>
         Asm.GetManifestResourceNames().Where(n => n.StartsWith(prefix, StringComparison.Ordinal));
 
-    /// <summary>Raw bytes of an embedded asset. Throws if the key is missing.</summary>
+    /// <summary>
+    /// Raw bytes of an asset: an embedded resource if one exists, otherwise a cached
+    /// file the <see cref="DiskResolver"/> maps this key to. Throws if neither is found.
+    /// </summary>
     public static byte[] Bytes(string key)
     {
-        using Stream s = Asm.GetManifestResourceStream(key)
-            ?? throw new FileNotFoundException($"Embedded asset not found: {key}");
-        using var ms = new MemoryStream();
-        s.CopyTo(ms);
-        return ms.ToArray();
+        Stream? s = Asm.GetManifestResourceStream(key);
+        if (s is null)
+        {
+            if (DiskResolver?.Invoke(key) is { } path && File.Exists(path))
+                return File.ReadAllBytes(path);
+            throw new FileNotFoundException($"Asset not found (embedded or cached): {key}");
+        }
+        using (s)
+        {
+            using var ms = new MemoryStream();
+            s.CopyTo(ms);
+            return ms.ToArray();
+        }
     }
 
     /// <summary>

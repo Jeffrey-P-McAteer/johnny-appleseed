@@ -23,6 +23,11 @@ static class Game
 
         AppData.Initialize();
 
+        // AI asset generation: off unless JOHNNY_APPLESEED_AI is set. Safe + cheap when
+        // disabled (this just reads the flag); when on it prepares ai-models/ + ai-assets/
+        // and lets scenes auto-generate missing weather/season editions in the background.
+        Ai.AiAssets.Initialize();
+
         // Tell the user where their save/progress lives, so they can find (or back
         // up) it without digging through platform-specific app-data folders.
         Console.Error.WriteLine($"[johnny-appleseed] save data: {SaveSystem.SavePath}");

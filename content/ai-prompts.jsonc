@@ -1,0 +1,39 @@
+{
+    // AI prompt placeholders. When a real weather/season/daylight asset is missing,
+    // the system may generate a stand-in from "base" (img2img) using the matching
+    // condition fragment, cache it under the app-data ai-assets/ folder, and show it
+    // until an artist adds the real file - a hand-authored asset always wins.
+    //
+    // Key = the art-set key the resolver uses (a background's path WITHOUT extension, or
+    // a portrait). "conditions" keys are ConditionVocab tags: weather (sunny|rainy|snowy),
+    // season (spring|summer|fall|winter), or time of day (morning|day|afternoon|evening|
+    // night). Add or remove entries freely; generation is inert without them.
+    //
+    // "mode": "img2img" (default) restyles a base image so the composition is preserved -
+    //         set "base" to the source, OR omit it and the scene supplies the image it was
+    //         about to show (e.g. an ink `# bg:` background).
+    //         "direct" generates from the prompt alone (txt2img) for slots with no base;
+    //         it needs the neural engine (the default procedural engine is img2img-only).
+
+    "graphics/main-menu/backdrop": {
+        "base": "graphics/main-menu/backdrop.jpg",
+        "img2img": { "strength": 0.45, "steps": 4 },
+        "conditions": {
+            "snowy":  "snow falling over a snow-blanketed orchard, soft cool winter light",
+            "summer": "lush green summer orchard at warm midday, vivid sunlit foliage",
+            "night":  "orchard at night under moonlight, deep blue tones, faint stars"
+        }
+    },
+
+    // The intro story's `# bg: graphics/view-of-the-natural-bridge-dc4df5.jpg`. No "base"
+    // here - the story scene passes that painting as the img2img source automatically.
+    "graphics/view-of-the-natural-bridge-dc4df5": {
+        "img2img": { "strength": 0.5, "steps": 4 },
+        "conditions": {
+            "rainy":  "cold rain over the natural bridge, wet stone, overcast gray sky",
+            "snowy":  "snow dusting the natural bridge and trees, pale winter light",
+            "winter": "bare winter trees around the natural bridge, cold blue daylight",
+            "night":  "the natural bridge at night, moonlight, deep blue shadows"
+        }
+    }
+}

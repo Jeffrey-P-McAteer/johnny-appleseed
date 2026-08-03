@@ -44,6 +44,7 @@ static class Program
             "content"       => ContentProbe.Run(),
             "ink"           => InkProbe.Run(),
             "capture"       => RunCapture(args),
+            "ai-gen"        => AiGenTool.Run(args),
             "selftest"      => RunSelfTest(args),
             _               => Usage(mode),
         };
@@ -72,9 +73,10 @@ static class Program
         bool story = which is null or "story";
         bool art   = which is null or "art";
         bool nav   = which is null or "nav";
-        if (!save && !input && !story && !art && !nav)
+        bool ai    = which is null or "ai";
+        if (!save && !input && !story && !art && !nav && !ai)
         {
-            Console.Error.WriteLine($"unknown suite '{which}'. valid: save | input | story | art | nav (default: all)");
+            Console.Error.WriteLine($"unknown suite '{which}'. valid: save | input | story | art | nav | ai (default: all)");
             return 2;
         }
 
@@ -84,6 +86,7 @@ static class Program
         if (story) rc |= StorySelfTest.Run();
         if (art)   rc |= ArtVariantSelfTest.Run();
         if (nav)   rc |= MenuNavSelfTest.Run();
+        if (ai)    rc |= AiAssetSelfTest.Run();
         return rc;
     }
 
@@ -91,7 +94,7 @@ static class Program
     {
         Console.Error.WriteLine(
             $"unknown mode '{bad}'. valid: probe (default) | list | raw [device] | " +
-            "assets | content | capture [menu|intro] [secs] [out.png] | selftest [save|input|story|art|nav]");
+            "assets | content | capture [menu|intro] [secs] [out.png] | ai-gen [set] [tags] | selftest [save|input|story|art|nav|ai]");
         return 2;
     }
 }

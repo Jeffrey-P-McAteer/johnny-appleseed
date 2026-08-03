@@ -1,5 +1,7 @@
 using Raylib_cs;
 using System.Numerics;
+using JohnnyAppleseed.Ai;
+using JohnnyAppleseed.Ambient;
 using JohnnyAppleseed.Audio;
 using JohnnyAppleseed.Input;
 using JohnnyAppleseed.Narrative;
@@ -36,7 +38,11 @@ sealed class StoryScene : IScene
 
     // Presentation state, carried across beats until a tag changes it.
     private string _heading = "";
-    private string? _bgImageKey;
+    private string? _bgImageKey;    // the concrete texture key currently drawn
+    private string? _bgSetKey;      // the requested bg as an art set (path w/o extension)
+    private string? _bgBaseKey;     // the untagged base image the bg tag named
+    private int _bgAiRevision = -1; // re-resolve the bg when a generated edition lands
+    private int _bgCondRevision = -1;
     private string? _musicKey;
 
     // Choice mode.
@@ -109,6 +115,12 @@ sealed class StoryScene : IScene
     public IScene? Update(float dt)
     {
         _bg.Update(dt);
+
+        // Swap in a freshly-generated bg edition, or re-pick if conditions changed.
+        if (_bgSetKey is not null &&
+            (AiAssets.Revision != _bgAiRevision || ConditionsProvider.Revision != _bgCondRevision))
+            ResolveBackground();
+
         _typewriter.Update(dt);
         _blink += dt;
         if (_pageFade < 1f)
@@ -258,12 +270,41 @@ sealed class StoryScene : IScene
     private void SetBackground(string val)
     {
         string k = val.StartsWith("graphics/") ? val : "graphics/" + val;
-        if (Assets.Exists(k)) _bgImageKey = k;
-        else
+        if (!Assets.Exists(k))
         {
-            _bgImageKey = null;
+            _bgSetKey = _bgBaseKey = _bgImageKey = null;
             Console.Error.WriteLine($"[story] bg not found: {k} (using parallax backdrop)");
+            return;
         }
+
+        // Treat the bg as an art set (stem without extension) so it can gain weather /
+        // season / time-of-day editions - hand-authored (bridge.rainy.png) or AI-generated
+        // from an authored prompt. The named file is the untagged base + img2img source.
+        _bgBaseKey = k;
+        _bgSetKey = k[..^Path.GetExtension(k).Length];
+        ResolveBackground();
+    }
+
+    // Pick the best edition of the current bg set for the current conditions, and (when
+    // AI is enabled and a prompt is authored) request a missing edition in the background.
+    // Re-runnable: called on a bg change, a conditions change, or when generation finishes.
+    private void ResolveBackground()
+    {
+        if (_bgSetKey is null || _bgBaseKey is null) return;
+
+        _bgAiRevision = AiAssets.Revision;
+        _bgCondRevision = ConditionsProvider.Revision;
+
+        AiVariant.Plan plan = AiVariant.Resolve(
+            _bgSetKey, ConditionsProvider.Current,
+            Assets.Keys(_bgSetKey), AiAssets.CachedKeys(_bgSetKey),
+            AiAssets.PromptFor(_bgSetKey), sourceFallback: _bgBaseKey);
+
+        if (plan.Generate is { } request)
+            AiAssets.RequestGeneration(request);
+
+        string chosen = plan.Chosen?.Key ?? _bgBaseKey;
+        _bgImageKey = Assets.Exists(chosen) ? chosen : _bgBaseKey;
     }
 
     private void PlayMusic(string val)

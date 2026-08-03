@@ -1,6 +1,7 @@
 using Raylib_cs;
 using System.Globalization;
 using System.Numerics;
+using JohnnyAppleseed.Ai;
 using JohnnyAppleseed.Ambient;
 using JohnnyAppleseed.Input;
 using JohnnyAppleseed.Platform;
@@ -67,6 +68,12 @@ sealed class PreferencesScene : IScene
             new ToggleControl("Fullscreen",
                 get: () => Raylib.IsWindowFullscreen(),
                 set: v => { if (v != Raylib.IsWindowFullscreen()) Raylib.ToggleFullscreen(); }),
+
+            // Off by default. When on, missing weather/season editions of backgrounds are
+            // generated on demand and cached under the app-data ai-assets/ folder.
+            new ToggleControl("AI-generated art",
+                get: () => AiAssets.Enabled,
+                set: v => AiAssets.Enabled = v),
 
             new ActionControl("Save data folder",
                 onActivate: () => OpenExternal.OpenFolder(AppData.Path),
