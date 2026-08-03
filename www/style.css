@@ -76,6 +76,9 @@ main {
     padding: 1rem 3rem;
 
     background: var(--panel);
+    background-image: url(tiled-ground-seedlings.png);
+    background-size: 212pt;
+    background-repeat: repeat;
 
     border: 1px solid var(--border);
     border-radius: var(--radius);

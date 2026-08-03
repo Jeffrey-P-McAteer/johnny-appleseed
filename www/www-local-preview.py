@@ -18,6 +18,8 @@ import io
 import json
 import tempfile
 import subprocess
+import traceback
+import time
 
 PORT = 8000
 
@@ -139,19 +141,28 @@ def main():
 
     startup_tmp_asset_renders()
 
-    with socketserver.ThreadingTCPServer(("127.0.0.1", PORT), VirtualDirectoryHandler) as httpd:
-        print(f"Serving on http://localhost:{PORT}")
-        print(f"Website: {WEB_ROOT}")
-
-        for prefix, directory in MOUNTS.items():
-            print(f"Mounted {prefix:<10} -> {directory}")
-
-        threading.Timer(0.5, open_browser).start()
-
+    while True:
         try:
-            httpd.serve_forever()
-        except KeyboardInterrupt:
-            print("\nStopping server...")
+            with socketserver.ThreadingTCPServer(("127.0.0.1", PORT), VirtualDirectoryHandler) as httpd:
+                print(f"Serving on http://localhost:{PORT}")
+                print(f"Website: {WEB_ROOT}")
+
+                for prefix, directory in MOUNTS.items():
+                    print(f"Mounted {prefix:<10} -> {directory}")
+
+                threading.Timer(0.5, open_browser).start()
+
+                try:
+                    httpd.serve_forever()
+                except KeyboardInterrupt:
+                    print("\nStopping server...")
+                    break
+        except OSError:
+            if 'already in use' in traceback.format_exc().lower():
+                time.sleep(0.5)
+                continue
+            else:
+                raise
 
 
 if __name__ == "__main__":
