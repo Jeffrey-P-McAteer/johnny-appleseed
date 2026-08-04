@@ -25,15 +25,19 @@
         }
     },
 
-    // The intro story's `# bg: graphics/view-of-the-natural-bridge-dc4df5.jpg`. No "base"
-    // here - the story scene passes that painting as the img2img source automatically.
-    "graphics/view-of-the-natural-bridge-dc4df5": {
-        "img2img": { "strength": 0.5, "steps": 4 },
+    // The intro story background. Fully AI-generated (no source art) from "scene", with a
+    // weather edition = scene + the matching fragment. mode:direct => needs the neural
+    // engine (-p:EnableAiOnnx=true); on the procedural build the parallax backdrop shows.
+    // The ink references this as `# bg: graphics/story/natural-bridge`.
+    "graphics/story/natural-bridge": {
+        "mode": "direct",
+        "scene": "A scenic photograph of Natural Bridge in Virginia with mountains and trees clearly visible surrounding the Natural Bridge",
+        "img2img": { "steps": 8, "strength": 0.6 },
         "conditions": {
-            "rainy":  "cold rain over the natural bridge, wet stone, overcast gray sky",
-            "snowy":  "snow dusting the natural bridge and trees, pale winter light",
-            "winter": "bare winter trees around the natural bridge, cold blue daylight",
-            "night":  "the natural bridge at night, moonlight, deep blue shadows"
+            "rainy":  "overcast sky, heavy rain, wet rock and dripping foliage",
+            "snowy":  "winter, falling snow, snow-covered ground and trees",
+            "sunny":  "clear blue sky, bright warm sunlight, crisp shadows",
+            "night":  "night, moonlit sky, deep blue tones, faint stars"
         }
     }
 }

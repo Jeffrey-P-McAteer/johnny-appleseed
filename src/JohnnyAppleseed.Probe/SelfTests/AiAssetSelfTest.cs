@@ -28,6 +28,7 @@ static class AiAssetSelfTest
         fails += NamingRoundTrip();
         fails += PromptJsoncParsing();
         fails += PlannerReuseAndGenerate();
+        fails += SceneBasedGeneration();
 
         Console.WriteLine(fails == 0
             ? "\nAI-ASSET SELF-TEST: ALL PASSED"
@@ -74,6 +75,12 @@ static class AiAssetSelfTest
 
         string store = AiCacheKey.StoreFileName(Set, slug, "abc123", ".png");
         fails += Eq(store, "graphics__main-menu__backdrop.night.rainy.abc123.png", "store filename shape");
+
+        // Untagged base edition (empty tags) - used by fully-generated scene sets.
+        fails += Eq(AiCacheKey.LogicalKey(Set, "", ".png"), "graphics/main-menu/backdrop.png",
+            "empty tags -> untagged base logical key");
+        fails += Eq(AiCacheKey.StoreFileName(Set, "", "abc123", ".png"), "graphics__main-menu__backdrop.abc123.png",
+            "empty tags -> base store filename");
 
         // The cached logical key must be selectable by the UNMODIFIED ArtVariant policy:
         // under rainy+night it should be chosen over the untagged base.
@@ -172,6 +179,36 @@ static class AiAssetSelfTest
         var p7 = AiVariant.Resolve(Set, Cond(Weather.Rainy, Daylight.Day),
             embeddedKeys: Array.Empty<string>(), cachedKeys: Array.Empty<string>(), directPrompt);
         fails += True(p7.Generate is { } g7 && g7.Mode == "direct", "mode:direct -> request carries direct mode");
+
+        return fails;
+    }
+
+    // A fully-generated background set (a scene prompt, no source art) - the intro bg.
+    private static int SceneBasedGeneration()
+    {
+        int fails = 0;
+        const string set = "graphics/story/natural-bridge";
+        var scene = new AiPromptSet
+        {
+            Mode = "direct",
+            Scene = "A scenic photograph of Natural Bridge in Virginia",
+            Conditions = new Dictionary<string, string> { ["rainy"] = "heavy rain" },
+        };
+
+        // Nothing cached yet -> the untagged BASE is generated first, txt2img from the scene.
+        var p1 = AiVariant.Resolve(set, Cond(Weather.Rainy, Daylight.Day),
+            Array.Empty<string>(), Array.Empty<string>(), scene);
+        fails += True(p1.Generate is { } g1 && g1.Tags.Count == 0 && g1.Mode == "direct"
+                      && g1.Prompt == "A scenic photograph of Natural Bridge in Virginia",
+            "scene set: base generated first (txt2img, empty tags)");
+
+        // Once the base exists, the rainy edition is requested as scene + fragment.
+        string baseKey = AiCacheKey.LogicalKey(set, "", ".png");   // graphics/story/natural-bridge.png
+        var p2 = AiVariant.Resolve(set, Cond(Weather.Rainy, Daylight.Day),
+            Array.Empty<string>(), new[] { baseKey }, scene);
+        fails += True(p2.Generate is { } g2 && g2.Tags.Count == 1 && g2.Tags[0] == "rainy"
+                      && g2.Prompt == "A scenic photograph of Natural Bridge in Virginia, heavy rain",
+            "scene set: weather edition = scene + fragment");
 
         return fails;
     }

@@ -55,10 +55,16 @@ static class AiVariant
     {
         // img2img source: the prompt's own base, else the image the scene was about to show.
         string source = !string.IsNullOrEmpty(prompt.Base) ? prompt.Base : (sourceFallback ?? "");
+        bool hasScene = !string.IsNullOrWhiteSpace(prompt.Scene);
         // Explicit mode wins; otherwise infer from whether we have a source to transform.
         string mode = !string.IsNullOrWhiteSpace(prompt.Mode)
             ? prompt.Mode!.Trim().ToLowerInvariant()
             : (source.Length == 0 ? "direct" : "img2img");
+
+        // A scene-based set (no source art) generates its own untagged base first, from the
+        // scene prompt alone, so there's a clear-weather image to show before the variants.
+        if (hasScene && !HasExactVariant(candidates, setKey, Array.Empty<string>()))
+            return new AiGenRequest(setKey, source, Array.Empty<string>(), "", prompt.Scene!.Trim(), prompt.Img2Img, mode);
 
         foreach (string tag in DesiredTags(cond))
         {
@@ -70,9 +76,18 @@ static class AiVariant
                 continue;   // already generated or hand-authored -> skip
 
             string slug = AiCacheKey.NormalizeTags(target);
-            return new AiGenRequest(setKey, source, target, slug, fragment.Trim(), prompt.Img2Img, mode);
+            // With a scene, each edition is scene + weather fragment; otherwise just the fragment.
+            string text = hasScene ? Combine(prompt.Scene, fragment) : fragment.Trim();
+            return new AiGenRequest(setKey, source, target, slug, text, prompt.Img2Img, mode);
         }
         return null;
+    }
+
+    private static string Combine(string? scene, string fragment)
+    {
+        if (string.IsNullOrWhiteSpace(scene)) return fragment.Trim();
+        if (string.IsNullOrWhiteSpace(fragment)) return scene.Trim();
+        return $"{scene.Trim()}, {fragment.Trim()}";
     }
 
     // The condition tags we'd like a bespoke edition for, most valuable first.

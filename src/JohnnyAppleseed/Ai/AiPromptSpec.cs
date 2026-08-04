@@ -26,10 +26,20 @@ sealed class AiPromptSet
     public string Base { get; set; } = "";
 
     /// <summary>
+    /// Base scene prompt for a fully-generated set with no source art (txt2img). When set,
+    /// the set generates its own untagged base from this text, and each weather edition is
+    /// this scene combined with the matching <see cref="Conditions"/> fragment. Needs the
+    /// neural engine (the procedural engine can only restyle an existing image).
+    /// Example: "A scenic photograph of Natural Bridge in Virginia ...".
+    /// </summary>
+    [JsonPropertyName("scene")]
+    public string? Scene { get; set; }
+
+    /// <summary>
     /// Generation mode: <c>"img2img"</c> (default) restyles the base/scene image so the
     /// composition is preserved - the right choice for weather editions of existing art;
-    /// <c>"direct"</c> generates purely from the prompt (txt2img), for slots with no base.
-    /// Direct mode needs the neural engine; the default procedural engine is img2img-only.
+    /// <c>"direct"</c> generates purely from the prompt (txt2img), for slots with no base
+    /// (see <see cref="Scene"/>). Direct mode needs the neural engine.
     /// </summary>
     [JsonPropertyName("mode")]
     public string? Mode { get; set; }

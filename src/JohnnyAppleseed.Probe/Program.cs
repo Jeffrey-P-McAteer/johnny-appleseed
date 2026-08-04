@@ -45,6 +45,7 @@ static class Program
             "ink"           => InkProbe.Run(),
             "capture"       => RunCapture(args),
             "ai-gen"        => AiGenTool.Run(args),
+            "ai-model"      => AiModelTool.Run(args),
             "selftest"      => RunSelfTest(args),
             _               => Usage(mode),
         };
@@ -94,7 +95,7 @@ static class Program
     {
         Console.Error.WriteLine(
             $"unknown mode '{bad}'. valid: probe (default) | list | raw [device] | " +
-            "assets | content | capture [menu|intro] [secs] [out.png] | ai-gen [set] [tags] | selftest [save|input|story|art|nav|ai]");
+            "assets | content | capture [menu|intro] [secs] [out.png] | ai-gen [set] [tags] | ai-model [check] | selftest [save|input|story|art|nav|ai]");
         return 2;
     }
 }

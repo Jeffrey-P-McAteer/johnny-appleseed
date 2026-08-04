@@ -77,7 +77,9 @@ static class AiCacheKey
     /// The hash suffix makes it unique and the presence-check trivial.
     /// </summary>
     public static string StoreFileName(string setKey, string tagsSlug, string cacheKey, string ext) =>
-        $"{SetSlug(setKey)}.{tagsSlug}.{cacheKey}{ext}";
+        tagsSlug.Length == 0
+            ? $"{SetSlug(setKey)}.{cacheKey}{ext}"                 // untagged base edition
+            : $"{SetSlug(setKey)}.{tagsSlug}.{cacheKey}{ext}";
 
     /// <summary>
     /// The embedded-style logical key a cached variant advertises to
@@ -85,5 +87,7 @@ static class AiCacheKey
     /// "graphics/main-menu/backdrop.night.rainy.png". <paramref name="ext"/> includes the dot.
     /// </summary>
     public static string LogicalKey(string setKey, string tagsSlug, string ext) =>
-        $"{setKey}.{tagsSlug}{ext}";
+        tagsSlug.Length == 0
+            ? $"{setKey}{ext}"                 // untagged base: "graphics/story/natural-bridge.png"
+            : $"{setKey}.{tagsSlug}{ext}";
 }

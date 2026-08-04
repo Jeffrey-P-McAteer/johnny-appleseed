@@ -23,6 +23,9 @@ sealed class ProceduralImageGenerator : IImageGenerator
     public string ModelId => "procedural";
     public string ModelRevision => "1";
 
+    // It only restyles an existing image; it cannot invent one from a prompt.
+    public bool SupportsTextToImage => false;
+
     public bool Generate(AiGenRequest req, byte[] sourceBytes, string sourceExt, string outputPath)
     {
         Image img = Raylib.LoadImageFromMemory(sourceExt, sourceBytes);

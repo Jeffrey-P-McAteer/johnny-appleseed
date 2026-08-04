@@ -17,6 +17,13 @@ interface IImageGenerator
     string ModelRevision { get; }
 
     /// <summary>
+    /// True if the engine can synthesize from a prompt alone (txt2img / "direct" mode,
+    /// no source image). The procedural stylizer cannot; the neural engine can. Used to
+    /// decide whether a file-less AI background set can be generated.
+    /// </summary>
+    bool SupportsTextToImage { get; }
+
+    /// <summary>
     /// Write a PNG for <paramref name="req"/> to <paramref name="outputPath"/>, derived
     /// from the source image <paramref name="sourceBytes"/> (whose format is
     /// <paramref name="sourceExt"/>, e.g. ".jpg"). Return true on success; return false

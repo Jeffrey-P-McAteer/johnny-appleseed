@@ -270,18 +270,23 @@ sealed class StoryScene : IScene
     private void SetBackground(string val)
     {
         string k = val.StartsWith("graphics/") ? val : "graphics/" + val;
-        if (!Assets.Exists(k))
+
+        // A concrete embedded asset (has an extension AND exists) is both the base image
+        // and the img2img source. Otherwise treat the tag as an art-set key: if a prompt is
+        // authored for it, the set generates its own art (e.g. a txt2img "scene" + weather),
+        // and the parallax backdrop shows until the first edition is cached.
+        bool concrete = Assets.Exists(k);
+        string setKey = Path.HasExtension(k) ? k[..^Path.GetExtension(k).Length] : k;
+
+        if (!concrete && AiAssets.PromptFor(setKey) is null)
         {
             _bgSetKey = _bgBaseKey = _bgImageKey = null;
             Console.Error.WriteLine($"[story] bg not found: {k} (using parallax backdrop)");
             return;
         }
 
-        // Treat the bg as an art set (stem without extension) so it can gain weather /
-        // season / time-of-day editions - hand-authored (bridge.rainy.png) or AI-generated
-        // from an authored prompt. The named file is the untagged base + img2img source.
-        _bgBaseKey = k;
-        _bgSetKey = k[..^Path.GetExtension(k).Length];
+        _bgBaseKey = concrete ? k : null;   // null -> a fully-generated (file-less) set
+        _bgSetKey = setKey;
         ResolveBackground();
     }
 
@@ -290,7 +295,7 @@ sealed class StoryScene : IScene
     // Re-runnable: called on a bg change, a conditions change, or when generation finishes.
     private void ResolveBackground()
     {
-        if (_bgSetKey is null || _bgBaseKey is null) return;
+        if (_bgSetKey is null) return;
 
         _bgAiRevision = AiAssets.Revision;
         _bgCondRevision = ConditionsProvider.Revision;
@@ -303,8 +308,10 @@ sealed class StoryScene : IScene
         if (plan.Generate is { } request)
             AiAssets.RequestGeneration(request);
 
-        string chosen = plan.Chosen?.Key ?? _bgBaseKey;
-        _bgImageKey = Assets.Exists(chosen) ? chosen : _bgBaseKey;
+        // Show the chosen edition if it resolves to real bytes (embedded or cached); for a
+        // file-less set with nothing generated yet, fall back to the parallax backdrop (null).
+        string? chosen = plan.Chosen?.Key ?? _bgBaseKey;
+        _bgImageKey = chosen is not null && Assets.Exists(chosen) ? chosen : null;
     }
 
     private void PlayMusic(string val)

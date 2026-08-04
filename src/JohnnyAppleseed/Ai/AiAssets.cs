@@ -44,6 +44,11 @@ static class AiAssets
     private static int _draining;   // Interlocked 0/1
     private static int _revision;
 
+    // Direct (txt2img) requests the current engine can't fulfil (procedural, before the
+    // neural model is ready). Tracked so we log the deferral once instead of every frame;
+    // cleared when the neural engine comes up so those editions get retried.
+    private static readonly HashSet<string> _declinedDirect = new(StringComparer.Ordinal);
+
     /// <summary>
     /// Whether AI generation is on. Default off; persisted to <c>ai-settings.json</c> so a
     /// user's choice survives restarts (toggle it in Preferences, like Fullscreen / Live
@@ -113,6 +118,39 @@ static class AiAssets
         LoadIndexLocked();
         Assets.DiskResolver = TryDiskPath;
         Log($"enabled; {_pathByKey.Count} cached variant(s), {_prompts.Count} prompt set(s)");
+
+        MaybeUseNeural();
+    }
+
+    // Bring up the neural engine (always compiled in) entirely on a background thread:
+    // download the ~4 GB model if missing, then load it (loading the 3.4 GB UNet is slow -
+    // doing it here keeps it OFF the startup/UI thread). The procedural stylizer serves
+    // meanwhile; when the engine is ready we swap it in, clear any "declined" markers, and
+    // bump the revision so scenes re-request the editions procedural couldn't make.
+    private static void MaybeUseNeural()
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                if (!AiModels.IsInstalled)
+                {
+                    Log("downloading image model in the background (~4 GB, one time); procedural stylizer until it lands...");
+                    if (!await AiModels.EnsureAsync(m => Log(m))) return;
+                }
+
+                Log("loading neural model (SD-1.5 LCM); this can take a while on CPU...");
+                var generator = new OnnxImageGenerator(AiModels.ModelDir);   // heavy: builds ONNX sessions
+                lock (_lock)
+                {
+                    _generator = generator;
+                    _declinedDirect.Clear();
+                    _revision++;
+                }
+                Log("neural engine ready; new generations will use it");
+            }
+            catch (Exception ex) { Log($"neural init failed, staying on procedural: {ex.Message}"); }
+        });
     }
 
     private static bool LoadSettingEnabled()
@@ -207,21 +245,42 @@ static class AiAssets
 
     private static void Fulfil(AiGenRequest req)
     {
-        // Direct (txt2img) generation has no source image and needs the neural engine;
-        // the default procedural engine is img2img-only. Skip cleanly until it's added.
-        if (req.Mode == "direct" || string.IsNullOrEmpty(req.SourceKey))
-        {
-            Log($"skip {req.SetKey}.{req.TagsSlug}: '{req.Mode}' needs the neural image engine (not yet built)");
-            return;
-        }
-        if (!Assets.Exists(req.SourceKey)) { Log($"source missing: {req.SourceKey}"); return; }
-
-        byte[] src    = Assets.Bytes(req.SourceKey);
-        string ext    = System.IO.Path.GetExtension(req.SourceKey);
-        string srcSha = AiCacheKey.Sha(src);
-
         IImageGenerator gen;
         lock (_lock) gen = _generator;
+
+        string tagLabel = req.TagsSlug.Length == 0 ? "(base)" : req.TagsSlug;
+
+        // Direct (txt2img) generation has no source image - only the neural engine can do
+        // it. The procedural stylizer declines cleanly (so a file-less AI set just shows
+        // the parallax backdrop until a neural build fills it in).
+        bool direct = req.Mode == "direct" || string.IsNullOrEmpty(req.SourceKey);
+        if (direct && !gen.SupportsTextToImage)
+        {
+            // The neural engine isn't up yet (downloading or loading). Defer quietly - log
+            // once per edition, not every frame; MaybeUseNeural clears this and bumps the
+            // revision when the engine is ready, so these get retried automatically.
+            bool firstTime;
+            lock (_lock) firstTime = _declinedDirect.Add(req.SetKey + "|" + req.TagsSlug);
+            if (firstTime)
+                Log($"deferring {req.SetKey}.{tagLabel}: text-to-image needs the neural engine (coming up); procedural can't do it");
+            return;
+        }
+
+        byte[] src;
+        string ext, srcSha;
+        if (direct)
+        {
+            src = Array.Empty<byte>();
+            ext = ".png";
+            srcSha = "txt2img";   // no source bytes; a constant so the cache key stays stable
+        }
+        else
+        {
+            if (!Assets.Exists(req.SourceKey)) { Log($"source missing: {req.SourceKey}"); return; }
+            src = Assets.Bytes(req.SourceKey);
+            ext = System.IO.Path.GetExtension(req.SourceKey);
+            srcSha = AiCacheKey.Sha(src);
+        }
 
         string paramsJson = ParamsJson(req.Img2Img, req.Mode);
         string cacheKey   = AiCacheKey.Compute(gen.ModelId, gen.ModelRevision,

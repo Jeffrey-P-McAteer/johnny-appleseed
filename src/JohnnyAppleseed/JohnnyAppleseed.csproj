@@ -46,6 +46,27 @@
   </ItemGroup>
 
   <!--
+    Neural image generator: SD-1.5 LCM img2img via OnnxStack + ONNX Runtime
+    (Ai/OnnxImageGenerator.cs). These ship in EVERY build - AI is a first-class feature,
+    never gated behind a developer flag. The default `dotnet build`/publish and
+    scripts/package.py all include them, so the packaged game always has AI capability.
+
+    Only the ~4 GB model WEIGHTS are not bundled (impractical inside the binary); they
+    auto-download at runtime via AiModels into the app-data ai-models/ folder the first
+    time a user enables AI in Preferences. Native ORT libs are self-extracted alongside
+    raylib's (IncludeNativeLibrariesForSelfExtract is already set for RID publishes).
+  -->
+  <ItemGroup>
+    <PackageReference Include="OnnxStack.StableDiffusion" Version="0.7.0" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.20.1" />
+    <!-- The CLIP tokenizer .onnx uses ORT custom ops; LoadModel fails without this. -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.Extensions" Version="0.13.0" />
+    <!-- OnnxStack is a DI/service API; these host the ServiceCollection + logging it needs. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
+  </ItemGroup>
+
+  <!--
     inkle's ink - the branching-narrative engine (Ink.Runtime.Story) + compiler
     (Ink.Compiler, compiles authored .ink at runtime so writers' raw .ink ships and
     can hot-reload). Both MIT, netstandard2.0. inkle publishes no usable NuGet, so
